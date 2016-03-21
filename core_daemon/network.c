@@ -32,7 +32,7 @@ static int check_tcp_pkt_valid(uint8_t *buf, int len)
 	uint16_t command = GET_CMD_FIELD(buf, 0, uint16_t);
 	uint16_t length = GET_CMD_FIELD(buf, 2, uint16_t);
 
-	if (!TCP_CMD_VALID(command))
+	if (!HSB_CMD_VALID(command))
 		return -2;
 
 	if (len != length)
@@ -43,9 +43,9 @@ static int check_tcp_pkt_valid(uint8_t *buf, int len)
 
 static int _reply_result(uint8_t *buf, int ok)
 {
-	int len = 16;
+	int len = 8;
 
-	MAKE_CMD_HDR(buf, TCP_CMD_RESULT, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_RESULT, len);
 
 	SET_CMD_FIELD(buf, 4, uint16_t, ok);
 
@@ -57,7 +57,7 @@ static int _reply_dev_id_list(uint8_t *buf, uint32_t *dev_id, int dev_num)
 	int len, id;
 
 	len = dev_num * 4 + 4;
-	MAKE_CMD_HDR(buf, TCP_CMD_GET_DEVICES_RESP, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_DEVS_RESP, len);
 
 	for (id = 0; id < dev_num; id++) {
 		SET_CMD_FIELD(buf, 4 + id * 4, uint32_t, dev_id[id]);
@@ -66,31 +66,122 @@ static int _reply_dev_id_list(uint8_t *buf, uint32_t *dev_id, int dev_num)
 	return len;
 }
 
-static int _reply_get_device_info(uint8_t *buf, HSB_DEVICE_T *dev)
+static int _reply_get_device_info(uint8_t *buf, HSB_DEV_T *dev)
 {
-	int len;
+	int len = 24;
 
-	// TODO
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_INFO_RESP, len);
+
+	SET_CMD_FIELD(buf, 4, uint32_t, dev->id); /* device id */
+	SET_CMD_FIELD(buf, 8, uint32_t, dev->driver->drv_id); /* driver id */
+	SET_CMD_FIELD(buf, 12, uint16_t, dev->dev_class); /* device class */
+	SET_CMD_FIELD(buf, 14, uint16_t, dev->interface); /* device interface */
+	memcpy(buf + 16, dev->mac, 6); /* mac address */
+
 	return 0;
 }
 
-static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, uint32_t *status)
+static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T *status, int num)
 {
-	int len = 16;
+	int len = 8 + num * 4;
+	int id;
 
-	MAKE_CMD_HDR(buf, TCP_CMD_GET_DEVICE_STATUS_RESP, len);
-
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_STATUS_RESP, len);
 	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
-	SET_CMD_FIELD(buf, 8, uint32_t, *status);
+
+	for (id = 0; id < num; num++) {
+		SET_CMD_FIELD(buf, 8 + id * 4, uint16_t, status[id].id);
+		SET_CMD_FIELD(buf, 10 + id * 4, uint16_t, status[id].val);
+	}
 
 	return len;
 }
 
+static int  _reply_get_timer(uint8_t *buf, uint32_t dev_id, HSB_TIMER_T *tm)
+{
+	int len = 20;
+	
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_TIMER_RESP, len);
+
+	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
+	SET_CMD_FIELD(buf, 8, uint16_t, tm->id);
+	SET_CMD_FIELD(buf, 10, uint8_t, tm->work_mode);
+	SET_CMD_FIELD(buf, 11, uint8_t, tm->flag);
+	SET_CMD_FIELD(buf, 12, uint8_t, tm->hour);
+	SET_CMD_FIELD(buf, 13, uint8_t, tm->minute);
+	SET_CMD_FIELD(buf, 14, uint8_t, tm->second);
+	SET_CMD_FIELD(buf, 15, uint8_t, tm->weekday);
+	SET_CMD_FIELD(buf, 16, uint8_t, tm->act_id);
+	SET_CMD_FIELD(buf, 17, uint8_t, tm->act_param1);
+	SET_CMD_FIELD(buf, 18, uint16_t, tm->act_param2);
+
+	return len;
+}
+
+static int  _reply_get_delay(uint8_t *buf, uint32_t dev_id, HSB_DELAY_T *delay)
+{
+	int len = 24;
+	
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_DELAY_RESP, len);
+
+	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
+	SET_CMD_FIELD(buf, 8, uint16_t, delay->id);
+	SET_CMD_FIELD(buf, 10, uint8_t, delay->work_mode);
+	SET_CMD_FIELD(buf, 11, uint8_t, delay->flag);
+	SET_CMD_FIELD(buf, 12, uint8_t, delay->evt_id);
+	SET_CMD_FIELD(buf, 13, uint8_t, delay->evt_param1);
+	SET_CMD_FIELD(buf, 14, uint16_t, delay->evt_param2);
+	SET_CMD_FIELD(buf, 16, uint8_t, delay->act_id);
+	SET_CMD_FIELD(buf, 17, uint8_t, delay->act_param1);
+	SET_CMD_FIELD(buf, 18, uint16_t, delay->act_param2);
+	SET_CMD_FIELD(buf, 20, uint32_t, delay->delay_sec);
+
+	return len;
+}
+
+static int  _reply_get_linkage(uint8_t *buf, uint32_t dev_id, HSB_LINKAGE_T *link)
+{
+	int len = 24;
+	
+	MAKE_CMD_HDR(buf, HSB_CMD_GET_LINKAGE_RESP, len);
+
+	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
+	SET_CMD_FIELD(buf, 8, uint16_t,link->id);
+	SET_CMD_FIELD(buf, 10, uint8_t,link->work_mode);
+	SET_CMD_FIELD(buf, 11, uint8_t,link->flag);
+	SET_CMD_FIELD(buf, 12, uint8_t, link->evt_id);
+	SET_CMD_FIELD(buf, 13, uint8_t, link->evt_param1);
+	SET_CMD_FIELD(buf, 14, uint16_t, link->evt_param2);
+	SET_CMD_FIELD(buf, 16, uint32_t, link->act_devid);
+	SET_CMD_FIELD(buf, 20, uint8_t, link->act_id);
+	SET_CMD_FIELD(buf, 21, uint8_t, link->act_param1);
+	SET_CMD_FIELD(buf, 22, uint16_t, link->act_param2);
+
+	return len;
+}
+
+static int _get_dev_status(uint8_t *buf, int len, HSB_STATUS_T *status, int *num)
+{
+	int id, total;
+
+	total = (len - 8) / 4;
+
+	for (id = 0; id < total; id++) {
+		status[id].id = GET_CMD_FIELD(buf, 8 + id * 4, uint16_t);
+		status[id].val = GET_CMD_FIELD(buf, 10 + id * 4, uint16_t);
+	}
+
+	*num = total;
+
+	return 0;
+}
+
+#if 0
 static int _notify_dev_status_updated(uint8_t *buf, uint32_t dev_id, uint32_t *status)
 {
 	int len = 16;
 
-	MAKE_CMD_HDR(buf, TCP_CMD_DEVICE_STATUS_UPDATED, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_STATUS_UPDATED, len);
 
 	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
 	SET_CMD_FIELD(buf, 8, uint32_t, *status);
@@ -102,7 +193,7 @@ static int _notify_dev_added(uint8_t *buf, uint32_t dev_id)
 {
 	int len = 16;
 
-	MAKE_CMD_HDR(buf, TCP_CMD_DEVICE_ADDED, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_ADDED, len);
 
 	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
 
@@ -113,88 +204,235 @@ static int _notify_dev_deled(uint8_t *buf, uint32_t dev_id)
 {
 	int len = 16;
 
-	MAKE_CMD_HDR(buf, TCP_CMD_DEVICE_DELED, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_DELED, len);
 
 	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
 
 	return len;
 }
-
+#endif
 
 int deal_tcp_packet(int fd, uint8_t *buf, int len)
 {
 	int ret = 0;
 	int rlen = 0;
 	uint8_t reply_buf[1024];
+	uint16_t cmd;
 
-	if (ret = check_tcp_pkt_valid(buf, len)) {
+	if (check_tcp_pkt_valid(buf, len)) {
 		hsb_debug("tcp pkt invalid\n");
 		return -1;
 	}
 
-	uint16_t command = GET_CMD_FIELD(buf, 0, uint16_t);
+	cmd = GET_CMD_FIELD(buf, 0, uint16_t);
 	memset(reply_buf, 0, sizeof(reply_buf));
 
-	hsb_debug("get tcp cmd %x\n", command);
-
-	switch (command) {
-		case TCP_CMD_GET_DEVICES:
+	switch (cmd) {
+		case HSB_CMD_GET_DEVS:
 		{
-			uint32_t dev_id[256];
+			uint32_t dev_id[128];
 			int dev_num;
 			ret = get_dev_id_list(dev_id, &dev_num);
 			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, REPLY_FAIL);
+				rlen = _reply_result(reply_buf, ret);
 			else
 				rlen = _reply_dev_id_list(reply_buf, dev_id, dev_num);
 
 			break;
 		}
-		case TCP_CMD_GET_DEVICE_INFO:
+		case HSB_CMD_GET_INFO:
 		{
-			HSB_DEVICE_T dev;
+			HSB_DEV_T dev;
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
 			ret = get_dev_info(dev_id, &dev);
 			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, REPLY_FAIL);
+				rlen = _reply_result(reply_buf, ret);
 			else
 				rlen = _reply_get_device_info(reply_buf, &dev);
 
 			break;
 		}
-		case TCP_CMD_GET_DEVICE_STATUS:
+		case HSB_CMD_GET_STATUS:
 		{
-			uint32_t status;
+			HSB_STATUS_T status[16];
+			int status_num;
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-			ret = get_dev_status(dev_id, &status);
+
+			ret = get_dev_status(dev_id, status, &status_num);
 			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, REPLY_FAIL);
+				rlen = _reply_result(reply_buf, ret);
 			else
-				rlen = _reply_get_device_status(reply_buf, dev_id, &status);
+				rlen = _reply_get_device_status(reply_buf, dev_id, status, status_num);
 
 			break;
 		}
-		case TCP_CMD_SET_DEVICE_STATUS:
+		case HSB_CMD_SET_STATUS:
 		{
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-			uint32_t status = GET_CMD_FIELD(buf, 8, uint32_t);
-			ret = set_dev_status(dev_id, &status);
-			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, REPLY_FAIL);
-			else
-				rlen = _reply_result(reply_buf, REPLY_OK);
+			HSB_STATUS_T status[16];
+			int status_num;
+
+			_get_dev_status(buf, len, status, &status_num);
+
+			ret = set_dev_status(dev_id, status, status_num);
+
+			rlen = _reply_result(reply_buf, ret);
 
 			break;
 		}
-		case TCP_CMD_PROBE_DEVICE:
+		case HSB_CMD_GET_TIMER:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t timer_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_TIMER_T tm = { 0 };
+
+			ret = get_dev_timer(dev_id, timer_id, &tm);
+			if (HSB_E_OK != ret)
+				rlen = _reply_result(reply_buf, ret);
+			else
+				rlen = _reply_get_timer(reply_buf, dev_id, &tm);
+
+			break;
+		}
+		case HSB_CMD_SET_TIMER:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t timer_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_TIMER_T tm = { 0 };
+
+			tm.id = timer_id;
+			tm.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			tm.flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			tm.hour = GET_CMD_FIELD(buf, 12, uint8_t);
+			tm.minute = GET_CMD_FIELD(buf, 13, uint8_t);
+			tm.second = GET_CMD_FIELD(buf, 14, uint8_t);
+			tm.weekday = GET_CMD_FIELD(buf, 15, uint8_t);
+			tm.act_id = GET_CMD_FIELD(buf, 16, uint8_t);
+			tm.act_param1 = GET_CMD_FIELD(buf, 17, uint8_t);
+			tm.act_param2 = GET_CMD_FIELD(buf, 18, uint16_t);
+
+			ret = set_dev_timer(dev_id, &tm);
+			rlen = _reply_result(reply_buf, ret);
+			break;
+		}
+		case HSB_CMD_DEL_TIMER:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t timer_id = GET_CMD_FIELD(buf, 8, uint16_t);
+
+			ret = del_dev_timer(dev_id, timer_id);
+			rlen = _reply_result(reply_buf, ret);
+			break;
+		}
+		case HSB_CMD_GET_DELAY:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t delay_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_DELAY_T delay = { 0 };
+
+			ret = get_dev_delay(dev_id, delay_id, &delay);
+			if (HSB_E_OK != ret)
+				rlen = _reply_result(reply_buf, ret);
+			else
+				rlen = _reply_get_delay(reply_buf, dev_id, &delay);
+
+			break;
+		}
+		case HSB_CMD_SET_DELAY:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t delay_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_DELAY_T delay = { 0 };
+
+			delay.id = delay_id;
+			delay.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			delay.flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			delay.evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
+			delay.evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
+			delay.evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
+			delay.act_id = GET_CMD_FIELD(buf, 16, uint8_t);
+			delay.act_param1 = GET_CMD_FIELD(buf, 17, uint8_t);
+			delay.act_param2 = GET_CMD_FIELD(buf, 18, uint16_t);
+			delay.delay_sec = GET_CMD_FIELD(buf, 20, uint32_t);
+
+			ret = set_dev_delay(dev_id, &delay);
+			rlen = _reply_result(reply_buf, ret);
+
+			break;
+		}
+		case HSB_CMD_DEL_DELAY:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t delay_id = GET_CMD_FIELD(buf, 8, uint16_t);
+
+			ret = del_dev_delay(dev_id, delay_id);
+			rlen = _reply_result(reply_buf, ret);
+
+			break;
+		}
+		case HSB_CMD_GET_LINKAGE:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t link_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_LINKAGE_T link = { 0 };
+
+			ret = get_dev_linkage(dev_id, link_id, &link);
+			if (HSB_E_OK != ret)
+				rlen = _reply_result(reply_buf, ret);
+			else
+				rlen = _reply_get_linkage(reply_buf, dev_id, &link);
+
+			break;
+		}
+		case HSB_CMD_SET_LINKAGE:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t link_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			HSB_LINKAGE_T link = { 0 };
+
+			link.id = link_id;
+			link.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			link.flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			link.evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
+			link.evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
+			link.evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
+			link.act_devid = GET_CMD_FIELD(buf, 16, uint32_t);
+			link.act_id = GET_CMD_FIELD(buf, 20, uint8_t);
+			link.act_param1 = GET_CMD_FIELD(buf, 21, uint8_t);
+			link.act_param2 = GET_CMD_FIELD(buf, 22, uint16_t);
+
+			ret = set_dev_linkage(dev_id, &link);
+			rlen = _reply_result(reply_buf, ret);
+			break;
+		}
+		case HSB_CMD_DEL_LINKAGE:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t link_id = GET_CMD_FIELD(buf, 8, uint16_t);
+
+			ret = del_dev_linkage(dev_id, link_id);
+			rlen = _reply_result(reply_buf, ret);
+			break;
+		}
+		case HSB_CMD_DO_ACTION:
+		{
+			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			HSB_ACTION_T act = { 0 };
+
+			act.id = GET_CMD_FIELD(buf, 8, uint8_t);
+			act.param1 = GET_CMD_FIELD(buf, 9, uint8_t);
+			act.param2 = GET_CMD_FIELD(buf, 10, uint16_t);
+
+			ret = set_dev_action(dev_id, &act);
+			rlen = _reply_result(reply_buf, ret);
+			break;
+		}
+		case HSB_CMD_PROBE_DEV:
 		{
 			uint16_t type = GET_CMD_FIELD(buf, 4, uint16_t);
 			hsb_debug("probe\n");
 			ret = probe_dev(type);
-			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, REPLY_FAIL);
-			else
-				rlen = _reply_result(reply_buf, REPLY_OK);
+			rlen = _reply_result(reply_buf, ret);
 
 			break;
 		}
@@ -210,20 +448,13 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 
 	struct timeval tv = { 1, 0 };
 	ret = write_timeout(fd, reply_buf, rlen, &tv);
-	//hsb_debug("reply %d bytes\n", rlen);
 
 	return 0;
 }
 
-typedef enum {
-	UDP_CMD_BOX_DISCOVER = 0x8801,
-	UDP_CMD_BOX_DISCOVER_RESP = 0x8802,
-	UDP_CMD_LAST,
-} UDP_CMD_T;
+#define UDP_CMD_VALID(x)	(x == HSB_CMD_BOX_DISCOVER || x == HSB_CMD_BOX_DISCOVER_RESP)
 
-#define UDP_CMD_VALID(x)	(x >= UDP_CMD_BOX_DISCOVER && x < UDP_CMD_LAST)
-
-int check_udp_pkt_valid(uint8_t *buf, int len)
+static int check_udp_pkt_valid(uint8_t *buf, int len)
 {
 	if (!buf || len <= 0)
 		return -1;
@@ -240,39 +471,38 @@ int check_udp_pkt_valid(uint8_t *buf, int len)
 	return 0;
 }
 
-static int _reply_box_discover(uint8_t *buf, uint32_t bid)
+static int _reply_box_discover(uint8_t *buf, uint16_t bid)
 {
-	int len = 16;
+	int len = 8;
 
-	MAKE_CMD_HDR(buf, UDP_CMD_BOX_DISCOVER_RESP, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_BOX_DISCOVER_RESP, len);
 
-	SET_CMD_FIELD(buf, 4, uint8_t, 0);
-	SET_CMD_FIELD(buf, 5, uint8_t, 1);
+	SET_CMD_FIELD(buf, 4, uint8_t, 0);	/* Minor Version */
+	SET_CMD_FIELD(buf, 5, uint8_t, 1);	/* Major Version */
 
-	SET_CMD_FIELD(buf, 8, uint32_t, bid);
+	SET_CMD_FIELD(buf, 6, uint16_t, bid);
 
 	return len;
 }
 
 static int deal_udp_packet(int fd, uint8_t *buf, int len, struct sockaddr *cliaddr, socklen_t slen)
 {
-	int ret = 0;
 	int rlen = 0;
-	uint8_t reply_buf[1024];
+	uint8_t reply_buf[32];
 	uint32_t bid = 1;
 
-	//hsb_debug("[udp]get %d bytes\n", len);
-
-	if (ret = check_udp_pkt_valid(buf, len))
+	if (check_udp_pkt_valid(buf, len)) {
+		hsb_critical("get invalid udp pkt\n");
 		return -1;
+	}
 
-	uint16_t command = GET_CMD_FIELD(buf, 0, uint16_t);
+	uint16_t cmd = GET_CMD_FIELD(buf, 0, uint16_t);
 	memset(reply_buf, 0, sizeof(reply_buf));
 
-	switch (command) {
-		case UDP_CMD_BOX_DISCOVER:
+	switch (cmd) {
+		case HSB_CMD_BOX_DISCOVER:
 		{
-			uint32_t uid = GET_CMD_FIELD(buf, 8, uint32_t);
+			uint16_t uid = GET_CMD_FIELD(buf, 6, uint16_t);
 			rlen = _reply_box_discover(reply_buf, bid);
 		}
 		default:
@@ -425,7 +655,6 @@ static int put_client_context(tcp_client_context *pctx)
 	return 0;
 }
 
-
 static void *tcp_listen_thread(void *arg)
 {
 	fd_set readset;
@@ -460,6 +689,7 @@ static void *tcp_listen_thread(void *arg)
 		g_thread_pool_push(client_pool.pool, (gpointer)pctx, NULL);
 	}
 
+	hsb_critical("tcp listen thread closed\n");
 	close(listenfd);
 	return NULL;
 }
@@ -475,6 +705,7 @@ static int _process_notify(int fd, tcp_client_context *pctx)
 
 		memset(buf, 0, sizeof(buf));
 		switch (notify->type) {
+#if 0 // TODO
 			case NOTIFY_TYPE_DEVICE_STATUS_UPDATED:
 			{
 				_notify_dev_status_updated(buf, notify->dev_id, &notify->status);
@@ -490,6 +721,7 @@ static int _process_notify(int fd, tcp_client_context *pctx)
 				_notify_dev_deled(buf, notify->dev_id);
 				break;
 			}
+#endif
 			default:
 				break;
 		}
@@ -574,7 +806,6 @@ static void _notify(notify_msg *msg)
 
 		fd = unix_socket_new();
 		unix_socket_send_to(fd, pctx->listen_path, NOTIFY_MESSAGE, strlen(NOTIFY_MESSAGE));
-		hsb_debug("notify to %s\n", pctx->listen_path);
 		unix_socket_free(fd);
 	}
 }
@@ -632,12 +863,18 @@ int init_network_module(void)
 {
 	pthread_t thread_id;
 	if (pthread_create(&thread_id, NULL, (thread_entry_func)udp_listen_thread, NULL))
+	{
+		hsb_critical("create udp listen thread failed\n");
 		return -1;
+	}
 
 	init_client_pool();
 
 	if (pthread_create(&thread_id, NULL, (thread_entry_func)tcp_listen_thread, NULL))
-		return -1;
+	{
+		hsb_critical("create tcp listen thread failed\n");
+		return -2;
+	}
 
 	return 0;
 }

@@ -16,9 +16,9 @@ typedef struct {
 
 static HSB_DEVICE_DRIVER_CONTEXT_T gl_ctx = { 0 };
 
-static HSB_DEVICE_DRIVER_T virtual_switch_drv;
+static HSB_DEV_DRV_T virtual_switch_drv;
 static int _register_device(struct in_addr *addr);
-static int _update_status(HSB_DEVICE_T *pdev, uint32_t *status);
+static int _update_status(HSB_DEV_T *pdev, uint32_t *status);
 
 static int virtual_switch_probe(void)
 {
@@ -46,7 +46,7 @@ static int virtual_switch_probe(void)
 	set_broadcast(sockfd, true);
 
 	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, UDP_CMD_DEVICE_DISCOVER);
+	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_DEVICE_DISCOVER);
 	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
 
 	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
@@ -64,7 +64,7 @@ static int virtual_switch_probe(void)
 		int cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
 		int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
 
-		if (cmd != UDP_CMD_DEVICE_DISCOVER_RESP || len != count) {
+		if (cmd != VS_CMD_DEVICE_DISCOVER_RESP || len != count) {
 			hsb_critical("probe: get err pkt, cmd=%x, len=%d\n", cmd, len);
 			continue;
 		}
@@ -82,7 +82,7 @@ static int virtual_switch_probe(void)
 	return 0;
 }
 
-static int virtual_switch_set_status(struct _HSB_DEVICE_T *pdev, uint32_t *status)
+static int virtual_switch_set_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int num)
 {
 	struct sockaddr_in servaddr;
 	socklen_t slen = sizeof(servaddr);
@@ -97,9 +97,10 @@ static int virtual_switch_set_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	memcpy(&servaddr.sin_addr, &pdev->prty.ip, sizeof(struct in_addr));
 
 	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, UDP_CMD_SET_STATUS);
+	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_SET_STATUS);
 	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
-	SET_CMD_FIELD(sbuf, 4, uint32_t, *status);
+	SET_CMD_FIELD(sbuf, 4, uint16_t, status->id);
+	SET_CMD_FIELD(sbuf, 6, uint16_t, status->val);
 
 	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
 
@@ -116,7 +117,7 @@ static int virtual_switch_set_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
 	uint16_t result = GET_CMD_FIELD(rbuf, 4, uint16_t);
 
-	if (cmd != UDP_CMD_SET_STATUS_RESP || len != count) {
+	if (cmd != VS_CMD_RESULT || len != count) {
 		hsb_critical("set status: get err pkt, cmd=%x, len=%d\n", cmd, len);
 		close(sockfd);
 		return -2;
@@ -137,7 +138,7 @@ static int virtual_switch_set_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	return 0;
 }
 
-static int virtual_switch_get_status(struct _HSB_DEVICE_T *pdev, uint32_t *status)
+static int virtual_switch_get_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int *num)
 {
 	struct sockaddr_in servaddr;
 	socklen_t slen = sizeof(servaddr);
@@ -152,7 +153,7 @@ static int virtual_switch_get_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	memcpy(&servaddr.sin_addr, &pdev->prty.ip, sizeof(struct in_addr));
 
 	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, UDP_CMD_GET_STATUS);
+	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_GET_STATUS);
 	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
 
 	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
@@ -169,13 +170,14 @@ static int virtual_switch_get_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	int cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
 	int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
 
-	if (cmd != UDP_CMD_GET_STATUS_RESP || len != count) {
+	if (cmd != VS_CMD_GET_STATUS_RESP || len != count) {
 		hsb_critical("get status: get err pkt, cmd=%x, len=%d\n", cmd, len);
 		close(sockfd);
 		return -2;
 	}
 
-	*status = GET_CMD_FIELD(rbuf, 4, uint32_t);
+	status->id = GET_CMD_FIELD(rbuf, 4, uint16_t);
+	status->val = GET_CMD_FIELD(rbuf, 6, uint16_t);
 
 	close(sockfd);
 	hsb_debug("send get status to device done, status=%d\n", *status);
@@ -183,17 +185,15 @@ static int virtual_switch_get_status(struct _HSB_DEVICE_T *pdev, uint32_t *statu
 	return 0;
 }
 
-static HSB_DEVICE_OP_T virtual_switch_op = {
+static HSB_DEV_OP_T virtual_switch_op = {
 	virtual_switch_probe,
-	virtual_switch_set_status,
 	virtual_switch_get_status,
+	virtual_switch_set_status,
 };
 
-static HSB_DEVICE_DRIVER_T virtual_switch_drv = {
+static HSB_DEV_DRV_T virtual_switch_drv = {
 	"virtual switch",
 	1,
-	HSB_DEVICE_CLASS_SWITCH,
-	HSB_DEVICE_INTERFACE_WIFI,
 	&virtual_switch_op,
 };
 
@@ -202,7 +202,7 @@ static int _remove_timeout_dev(void)
 	GQueue *queue = &gl_ctx.queue;
 	int len = g_queue_get_length(queue);
 	int id;
-	HSB_DEVICE_T *pdev;
+	HSB_DEV_T *pdev;
 
 	for (id = 0; id < len; ) {
 		pdev = g_queue_peek_nth(queue, id);
@@ -226,12 +226,12 @@ static int _remove_timeout_dev(void)
 	return 0;
 }
 
-static HSB_DEVICE_T *_find_device(struct in_addr *addr)
+static HSB_DEV_T *_find_device(struct in_addr *addr)
 {
 	GQueue *queue = &gl_ctx.queue;
 	int len = g_queue_get_length(queue);
 	int id;
-	HSB_DEVICE_T *pdev;
+	HSB_DEV_T *pdev;
 
 	for (id = 0; id < len; id++) {
 		pdev = g_queue_peek_nth(queue, id);
@@ -246,7 +246,7 @@ static HSB_DEVICE_T *_find_device(struct in_addr *addr)
 static int _register_device(struct in_addr *addr)
 {
 	GQueue *queue = &gl_ctx.queue;
-	HSB_DEVICE_T *pdev = create_dev();
+	HSB_DEV_T *pdev = create_dev();
 	if (!pdev) {
 		hsb_critical("create dev fail\n");
 		return -1;
@@ -263,14 +263,14 @@ static int _register_device(struct in_addr *addr)
 	return 0;
 }
 
-static int _refresh_device(HSB_DEVICE_T *pdev)
+static int _refresh_device(HSB_DEV_T *pdev)
 {
 	pdev->idle_time = 0;
 
 	return 0;
 }
 
-static int _update_status(HSB_DEVICE_T *pdev, uint32_t *status)
+static int _update_status(HSB_DEV_T *pdev, uint32_t *status)
 {
 	update_dev_status(pdev, status);
 	
@@ -311,7 +311,7 @@ static void *_monitor_thread(void *arg)
 			_remove_timeout_dev();
 
 			memset(sbuf, 0, sizeof(sbuf));
-			SET_CMD_FIELD(sbuf, 0, uint16_t, UDP_CMD_KEEP_ALIVE);
+			SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_KEEP_ALIVE);
 			SET_CMD_FIELD(sbuf, 2, uint16_t, cmd_len);
 			
 			sendto(fd, sbuf, cmd_len, 0, (struct sockaddr *)&mc_addr, mc_len);
@@ -334,18 +334,18 @@ static void *_monitor_thread(void *arg)
 
 		//hsb_debug("get a cmd: %x\n", cmd);
 
-		HSB_DEVICE_T *pdev = find_dev_by_ip(&dev_addr.sin_addr);
+		HSB_DEV_T *pdev = find_dev_by_ip(&dev_addr.sin_addr);
 		if (!pdev) {
 			_register_device(&dev_addr.sin_addr);
 			pdev = find_dev_by_ip(&dev_addr.sin_addr);
 		}
 
 		switch (cmd) {
-			case UDP_CMD_KEEP_ALIVE:
+			case VS_CMD_KEEP_ALIVE:
 			{
 				break;
 			}
-			case UDP_CMD_UPDATE_STATUS:
+			case VS_CMD_STATUS_CHANGED:
 			{
 				uint32_t status = GET_CMD_FIELD(rbuf, 4, uint32_t);
 				hsb_debug("status=%d\n", status);

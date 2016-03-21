@@ -3,34 +3,100 @@
 #define _DEVICE_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <netinet/in.h>
 #include "net_protocol.h"
+#include "hsb_device.h"
 
 struct _HSB_DEV_T;
 struct _HSB_DEV_DRV_T;
 
 typedef struct {
 	int (*probe)(void);
-	int (*set_status)(struct _HSB_DEV_T *pdev, uint32_t *status);
-	int (*get_status)(struct _HSB_DEV_T *pdev, uint32_t *status);
+	int (*get_status)(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int *num);
+	int (*set_status)(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int num);
 } HSB_DEV_OP_T;
 
 typedef struct _HSB_DEV_DRV_T {
 	char			*name;
 	uint32_t		drv_id;
 
-	HSB_DEV_CLASS_T		dev_class;
-	uint32_T		interface;
-
 	HSB_DEV_OP_T		*op;
 } HSB_DEV_DRV_T;
+
+typedef struct _HSB_TIMER_T {
+	uint16_t	id;
+	uint8_t		work_mode;
+	uint8_t		flag;
+	uint8_t		hour;
+	uint8_t		minute;
+	uint8_t		second;
+	uint8_t		weekday;
+	uint8_t		act_id;
+	uint8_t		act_param1;
+	uint16_t	act_param2;
+} HSB_TIMER_T;
+
+typedef struct {
+	bool		active;
+} HSB_TIMER_STATUS_T;
+
+typedef struct _HSB_DELAY_T {
+	uint16_t	id;
+	uint8_t		work_mode;
+	uint8_t		flag;
+	uint8_t		evt_id;
+	uint8_t		evt_param1;
+	uint16_t	evt_param2;
+	uint8_t		act_id;
+	uint8_t		act_param1;
+	uint16_t	act_param2;
+	uint32_t	delay_sec;
+} HSB_DELAY_T;
+
+typedef struct {
+	bool		active;
+} HSB_DELAY_STATUS_T;
+
+typedef struct _HSB_LINKAGE_T {
+	uint16_t	id;
+	uint8_t		work_mode;
+	uint8_t		flag;
+	uint8_t		evt_id;
+	uint8_t		evt_param1;
+	uint16_t	evt_param2;
+	uint32_t	act_devid;
+	uint8_t		act_id;
+	uint8_t		act_param1;
+	uint16_t	act_param2;
+} HSB_LINKAGE_T;
+
+typedef struct {
+	bool		active;
+} HSB_LINKAGE_STATUS_T;
+
+#define HSB_DEV_MAX_TIMER_NUM		(32)
+#define HSB_DEV_MAX_DELAY_NUM		(8)
+#define HSB_DEV_MAX_LINKAGE_NUM		(8)
+
 
 typedef struct _HSB_DEV_T {
 	uint32_t		id;
 
 	uint32_t		status;
 
+	HSB_DEV_CLASS_T		dev_class;
+	uint32_t		interface;
 	uint8_t			mac[6];
+
+	HSB_TIMER_T		timer[HSB_DEV_MAX_TIMER_NUM];
+	HSB_TIMER_STATUS_T	timer_status[HSB_DEV_MAX_TIMER_NUM];
+
+	HSB_DELAY_T		delay[HSB_DEV_MAX_DELAY_NUM];
+	HSB_DELAY_STATUS_T	delay_status[HSB_DEV_MAX_DELAY_NUM];
+
+	HSB_LINKAGE_T		link[HSB_DEV_MAX_LINKAGE_NUM];
+	HSB_LINKAGE_STATUS_T	link_status[HSB_DEV_MAX_LINKAGE_NUM];
 
 	union {
 		struct in_addr	ip;
@@ -46,9 +112,28 @@ typedef struct _HSB_DEV_T {
 int init_dev_module(void);
 int get_dev_id_list(uint32_t *dev_id, int *dev_num);
 int get_dev_info(uint32_t dev_id, HSB_DEV_T *dev);
-int get_dev_status(uint32_t dev_id, uint32_t *status);
-int set_dev_status(uint32_t dev_id, uint32_t *status);
+int get_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int *num);
+int set_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int num);
 int probe_dev(uint32_t drv_id);
+
+
+int get_dev_timer(uint32_t dev_id, uint16_t timer_id, HSB_TIMER_T *timer);
+int set_dev_timer(uint32_t dev_id, const HSB_TIMER_T *timer);
+int del_dev_timer(uint32_t dev_id, uint16_t timer_id);
+int get_dev_delay(uint32_t dev_id, uint16_t delay_id, HSB_DELAY_T *delay);
+int set_dev_delay(uint32_t dev_id, const HSB_DELAY_T *delay);
+int del_dev_delay(uint32_t dev_id, uint16_t delay_id);
+int get_dev_linkage(uint32_t dev_id, uint16_t link_id, HSB_LINKAGE_T *link);
+int set_dev_linkage(uint32_t dev_id, const HSB_LINKAGE_T *link);
+int del_dev_linkage(uint32_t dev_id, uint16_t link_id);
+
+typedef struct {
+	uint8_t		id;
+	uint8_t		param1;
+	uint16_t	param2;
+} HSB_ACTION_T;
+
+int set_dev_action(uint32_t dev_id, const HSB_ACTION_T *act);
 
 HSB_DEV_T *create_dev(void);
 HSB_DEV_T *find_dev_by_ip(struct in_addr *ip);

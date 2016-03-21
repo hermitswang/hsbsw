@@ -36,7 +36,7 @@ export ARCH CC CFLAGS HSB_INCLUDES HSB_LIBS  LDFLAGS CFLAGS  PKG_CONFIG_PATH EXE
 
 .PHONY:  Id  dep lib misc drivers
 
-SUBDIR=lib core_daemon mm_daemon misc
+SUBDIR=lib core_daemon misc
 all :
 	for i in ${SUBDIR}; do make all -C "$${i}" ; done
 
@@ -45,9 +45,6 @@ lib :
 
 core : lib
 	make all -C core_daemon
-
-mm : lib
-	make all -C mm_daemon
 
 misc : lib
 	make all -C misc

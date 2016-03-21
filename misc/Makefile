@@ -1,5 +1,5 @@
 
-TARGET=un_send pad_sim switch_sim switch_probe
+TARGET=un_send # pad_sim switch_sim switch_probe
 
 SRC=$(wildcard *.c)
 OBJS=${SRC:%.c=%.o}

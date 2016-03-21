@@ -27,14 +27,14 @@ int get_dev_id_list(uint32_t *dev_id, int *dev_num)
 {
 	guint len, id;
 	GQueue *queue = &gl_device_cb.queue;
-	HSB_DEVICE_T	*pdev;
+	HSB_DEV_T	*pdev;
 	int num = 0;
 
 	HSB_DEVICE_CB_LOCK();
 
 	len = g_queue_get_length(queue);
 	for (id = 0; id < len; id++) {
-		pdev = (HSB_DEVICE_T *)g_queue_peek_nth(queue, id);
+		pdev = (HSB_DEV_T *)g_queue_peek_nth(queue, id);
 		if (!pdev) {
 			hsb_critical("device null\n");
 			num = 0;
@@ -52,15 +52,15 @@ int get_dev_id_list(uint32_t *dev_id, int *dev_num)
 	return 0;
 }
 
-static HSB_DEVICE_T *_find_dev(uint32_t dev_id)
+static HSB_DEV_T *_find_dev(uint32_t dev_id)
 {
 	guint len, id;
 	GQueue *queue = &gl_device_cb.queue;
-	HSB_DEVICE_T	*pdev = NULL;
+	HSB_DEV_T	*pdev = NULL;
 
 	len = g_queue_get_length(queue);
 	for (id = 0; id < len; id++) {
-		pdev = (HSB_DEVICE_T *)g_queue_peek_nth(queue, id);
+		pdev = (HSB_DEV_T *)g_queue_peek_nth(queue, id);
 		if (!pdev) {
 			hsb_critical("device null\n");
 			continue;
@@ -73,10 +73,10 @@ static HSB_DEVICE_T *_find_dev(uint32_t dev_id)
 	return NULL;
 }
 
-int get_dev_info(uint32_t dev_id, HSB_DEVICE_T *dev)
+int get_dev_info(uint32_t dev_id, HSB_DEV_T *dev)
 {
 	int ret = 0;
-	HSB_DEVICE_T *pdev = NULL;
+	HSB_DEV_T *pdev = NULL;
 
 	HSB_DEVICE_CB_LOCK();
 
@@ -92,11 +92,11 @@ int get_dev_info(uint32_t dev_id, HSB_DEVICE_T *dev)
 	return ret;
 }
 
-int get_dev_status(uint32_t dev_id, uint32_t *status)
+int get_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int *num)
 {
 	int ret;
 
-	HSB_DEVICE_T *pdev = NULL;
+	HSB_DEV_T *pdev = NULL;
 
 	HSB_DEVICE_CB_LOCK();
 
@@ -108,7 +108,7 @@ int get_dev_status(uint32_t dev_id, uint32_t *status)
 	}
 
 	if (pdev->driver->op->get_status)
-		ret = pdev->driver->op->get_status(pdev, status);
+		ret = pdev->driver->op->get_status(pdev, status, num);
 
 	HSB_DEVICE_CB_UNLOCK();
 
@@ -119,11 +119,11 @@ fail:
 	return ret;
 }
 
-int set_dev_status(uint32_t dev_id, uint32_t *status)
+int set_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int num)
 {
 	int ret;
 
-	HSB_DEVICE_T *pdev = NULL;
+	HSB_DEV_T *pdev = NULL;
 
 	HSB_DEVICE_CB_LOCK();
 
@@ -135,7 +135,7 @@ int set_dev_status(uint32_t dev_id, uint32_t *status)
 	}
 
 	if (pdev->driver->op->set_status)
-		ret = pdev->driver->op->set_status(pdev, status);
+		ret = pdev->driver->op->set_status(pdev, status, num);
 
 	HSB_DEVICE_CB_UNLOCK();
 
@@ -146,15 +146,15 @@ fail:
 	return ret;
 }
 
-static HSB_DEVICE_DRIVER_T *_find_drv(uint32_t drv_id)
+static HSB_DEV_DRV_T *_find_drv(uint32_t drv_id)
 {
 	GQueue *queue = &gl_device_cb.driverq;
-	HSB_DEVICE_DRIVER_T *pdrv = NULL;
+	HSB_DEV_DRV_T *pdrv = NULL;
 	int len, id;
 
 	len = g_queue_get_length(queue);
 	for (id = 0; id < len; id++) {
-		pdrv = (HSB_DEVICE_DRIVER_T *)g_queue_peek_nth(queue, id);
+		pdrv = (HSB_DEV_DRV_T *)g_queue_peek_nth(queue, id);
 		if (!pdrv) {
 			hsb_critical("drv null\n");
 			continue;
@@ -170,10 +170,10 @@ static HSB_DEVICE_DRIVER_T *_find_drv(uint32_t drv_id)
 
 int probe_dev(uint32_t drv_id)
 {
-	HSB_DEVICE_DRIVER_T *pdrv = _find_drv(drv_id);
+	HSB_DEV_DRV_T *pdrv = _find_drv(drv_id);
 
 	if (!pdrv)
-		return HSB_E_BAD_PARAMETERS;
+		return HSB_E_BAD_PARAM;
 
 	return pdrv->op->probe();
 }
@@ -192,18 +192,18 @@ static uint32_t alloc_dev_id(void)
 }
 
 
-int register_dev_drv(HSB_DEVICE_DRIVER_T *drv)
+int register_dev_drv(HSB_DEV_DRV_T *drv)
 {
 	if (!drv)
-		return HSB_E_BAD_PARAMETERS;
+		return HSB_E_BAD_PARAM;
 
 	int len, id;
 	GQueue *queue = &gl_device_cb.driverq;
-	HSB_DEVICE_DRIVER_T *pdrv = NULL;
+	HSB_DEV_DRV_T *pdrv = NULL;
 
 	len = g_queue_get_length(queue);
 	for (id = 0; id < len; id++) {
-		pdrv = (HSB_DEVICE_DRIVER_T *)g_queue_peek_nth(queue, id);
+		pdrv = (HSB_DEV_DRV_T *)g_queue_peek_nth(queue, id);
 		if (!pdrv) {
 			hsb_critical("drv null\n");
 			continue;
@@ -222,15 +222,15 @@ int register_dev_drv(HSB_DEVICE_DRIVER_T *drv)
 	return HSB_E_OK;
 }
 
-HSB_DEVICE_T *find_dev_by_ip(struct in_addr *ip)
+HSB_DEV_T *find_dev_by_ip(struct in_addr *ip)
 {
 	guint len, id;
 	GQueue *queue = &gl_device_cb.queue;
-	HSB_DEVICE_T	*pdev = NULL;
+	HSB_DEV_T	*pdev = NULL;
 
 	len = g_queue_get_length(queue);
 	for (id = 0; id < len; id++) {
-		pdev = (HSB_DEVICE_T *)g_queue_peek_nth(queue, id);
+		pdev = (HSB_DEV_T *)g_queue_peek_nth(queue, id);
 		if (!pdev) {
 			hsb_critical("device null\n");
 			continue;
@@ -243,23 +243,23 @@ HSB_DEVICE_T *find_dev_by_ip(struct in_addr *ip)
 	return NULL;
 }
 
-HSB_DEVICE_T *create_dev(void)
+HSB_DEV_T *create_dev(void)
 {
-	HSB_DEVICE_T *pdev = g_slice_new0(HSB_DEVICE_T);
+	HSB_DEV_T *pdev = g_slice_new0(HSB_DEV_T);
 	if (pdev)
 		pdev->id = alloc_dev_id();
 
 	return pdev;
 }
 
-int destroy_dev(HSB_DEVICE_T *dev)
+int destroy_dev(HSB_DEV_T *dev)
 {
-	g_slice_free(HSB_DEVICE_T, dev);
+	g_slice_free(HSB_DEV_T, dev);
 
 	return 0;
 }
 
-int register_dev(HSB_DEVICE_T *dev)
+int register_dev(HSB_DEV_T *dev)
 {
 	guint len, id;
 	GQueue *queue = &gl_device_cb.queue;
@@ -273,7 +273,7 @@ int register_dev(HSB_DEVICE_T *dev)
 	return 0;
 }
 
-int remove_dev(HSB_DEVICE_T *dev)
+int remove_dev(HSB_DEV_T *dev)
 {
 	GQueue *queue = &gl_device_cb.queue;
 
@@ -286,7 +286,7 @@ int remove_dev(HSB_DEVICE_T *dev)
 	return 0;
 }
 
-int update_dev_status(HSB_DEVICE_T *dev, uint32_t *status)
+int update_dev_status(HSB_DEV_T *dev, uint32_t *status)
 {
 	return notify_dev_status_updated(dev->id, status);
 }
@@ -294,7 +294,7 @@ int update_dev_status(HSB_DEVICE_T *dev, uint32_t *status)
 static void probe_all_devices(void)
 {
 	GQueue *queue = &gl_device_cb.driverq;
-	HSB_DEVICE_DRIVER_T *drv;
+	HSB_DEV_DRV_T *drv;
 	int id, len = g_queue_get_length(queue);
 
 	for (id = 0; id < len; id++) {
@@ -314,6 +314,288 @@ int init_dev_module(void)
 	probe_all_devices();
 
 	return 0;
+}
+
+int get_dev_timer(uint32_t dev_id, uint16_t timer_id, HSB_TIMER_T *timer)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (timer_id >= (sizeof(dev->timer) / sizeof(dev->timer[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_TIMER_T *tm = &dev->timer[timer_id];
+	HSB_TIMER_STATUS_T *status = &dev->timer_status[timer_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memcpy(timer, tm, sizeof(*tm));
+
+_out:
+	return ret;
+}
+
+int set_dev_timer(uint32_t dev_id, const HSB_TIMER_T *timer)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+	uint16_t timer_id = timer->id;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (timer_id >= (sizeof(dev->timer) / sizeof(dev->timer[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_TIMER_T *tm = &dev->timer[timer_id];
+	HSB_TIMER_STATUS_T *status = &dev->timer_status[timer_id];
+
+	memcpy(tm, timer, sizeof(*tm));
+	status->active = true;
+
+_out:
+	return ret;
+}
+
+int del_dev_timer(uint32_t dev_id, uint16_t timer_id)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (timer_id >= (sizeof(dev->timer) / sizeof(dev->timer[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_TIMER_T *tm = &dev->timer[timer_id];
+	HSB_TIMER_STATUS_T *status = &dev->timer_status[timer_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memset(tm, 0, sizeof(*tm));
+	status->active = false;
+
+_out:
+	return ret;
+}
+
+int get_dev_delay(uint32_t dev_id, uint16_t delay_id, HSB_DELAY_T *delay)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (delay_id >= (sizeof(dev->delay) / sizeof(dev->delay[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_DELAY_T *dl = &dev->delay[delay_id];
+	HSB_DELAY_STATUS_T *status = &dev->delay_status[delay_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memcpy(delay, dl, sizeof(*dl));
+
+_out:
+	return ret;
+}
+
+int set_dev_delay(uint32_t dev_id, const HSB_DELAY_T *delay)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+	uint16_t delay_id = delay->id;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (delay_id >= (sizeof(dev->delay) / sizeof(dev->delay[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_DELAY_T *dl = &dev->delay[delay_id];
+	HSB_DELAY_STATUS_T *status = &dev->delay_status[delay_id];
+
+	memcpy(dl, delay, sizeof(*dl));
+	status->active = true;
+
+_out:
+	return ret;
+}
+
+int del_dev_delay(uint32_t dev_id, uint16_t delay_id)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (delay_id >= (sizeof(dev->delay) / sizeof(dev->delay[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_DELAY_T *dl = &dev->delay[delay_id];
+	HSB_DELAY_STATUS_T *status = &dev->delay_status[delay_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memset(dl, 0, sizeof(*dl));
+	status->active = false;
+
+_out:
+	return ret;
+}
+
+int get_dev_linkage(uint32_t dev_id, uint16_t link_id, HSB_LINKAGE_T *link)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (link_id >= (sizeof(dev->link) / sizeof(dev->link[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_LINKAGE_T *lk = &dev->link[link_id];
+	HSB_LINKAGE_STATUS_T *status = &dev->link_status[link_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memcpy(link, lk, sizeof(*lk));
+
+_out:
+	return ret;
+
+}
+
+int set_dev_linkage(uint32_t dev_id, const HSB_LINKAGE_T *link)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+	uint16_t link_id = link->id;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (link_id >= (sizeof(dev->link) / sizeof(dev->link[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_LINKAGE_T *lk = &dev->link[link_id];
+	HSB_LINKAGE_STATUS_T *status = &dev->link_status[link_id];
+
+	memcpy(lk, link, sizeof(*lk));
+	status->active = true;
+
+_out:
+	return ret;
+}
+
+
+int del_dev_linkage(uint32_t dev_id, uint16_t link_id)
+{
+	HSB_DEV_T *dev;
+	int ret = HSB_E_OK;
+
+	dev = _find_dev(dev_id);
+
+	if (!dev) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	if (link_id >= (sizeof(dev->link) / sizeof(dev->link[0]))) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	HSB_LINKAGE_T *lk = &dev->link[link_id];
+	HSB_LINKAGE_STATUS_T *status = &dev->link_status[link_id];
+
+	if (!status->active) {
+		ret = HSB_E_BAD_PARAM;
+		goto _out;
+	}
+
+	memset(lk, 0, sizeof(*lk));
+	status->active = false;
+
+_out:
+	return ret;
+}
+
+int set_dev_action(uint32_t dev_id, const HSB_ACTION_T *act)
+{
+	// TODO
+
+	return HSB_E_OK;
 }
 
 
