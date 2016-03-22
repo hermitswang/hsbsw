@@ -32,13 +32,13 @@ typedef struct _HSB_TIMER_T {
 	uint8_t		minute;
 	uint8_t		second;
 	uint8_t		weekday;
-	uint8_t		act_id;
-	uint8_t		act_param1;
-	uint16_t	act_param2;
+	uint16_t	act_id;
+	uint16_t	act_param;
 } HSB_TIMER_T;
 
 typedef struct {
 	bool		active;
+	bool		expired;
 } HSB_TIMER_STATUS_T;
 
 typedef struct _HSB_DELAY_T {
@@ -48,14 +48,14 @@ typedef struct _HSB_DELAY_T {
 	uint8_t		evt_id;
 	uint8_t		evt_param1;
 	uint16_t	evt_param2;
-	uint8_t		act_id;
-	uint8_t		act_param1;
-	uint16_t	act_param2;
+	uint16_t	act_id;
+	uint16_t	act_param;
 	uint32_t	delay_sec;
 } HSB_DELAY_T;
 
 typedef struct {
 	bool		active;
+	bool		started;
 } HSB_DELAY_STATUS_T;
 
 typedef struct _HSB_LINKAGE_T {
@@ -66,9 +66,8 @@ typedef struct _HSB_LINKAGE_T {
 	uint8_t		evt_param1;
 	uint16_t	evt_param2;
 	uint32_t	act_devid;
-	uint8_t		act_id;
-	uint8_t		act_param1;
-	uint16_t	act_param2;
+	uint16_t	act_id;
+	uint16_t	act_param;
 } HSB_LINKAGE_T;
 
 typedef struct {
@@ -88,6 +87,8 @@ typedef struct _HSB_DEV_T {
 	HSB_DEV_CLASS_T		dev_class;
 	uint32_t		interface;
 	uint8_t			mac[6];
+
+	HSB_WORK_MODE_T		work_mode;
 
 	HSB_TIMER_T		timer[HSB_DEV_MAX_TIMER_NUM];
 	HSB_TIMER_STATUS_T	timer_status[HSB_DEV_MAX_TIMER_NUM];
@@ -128,9 +129,8 @@ int set_dev_linkage(uint32_t dev_id, const HSB_LINKAGE_T *link);
 int del_dev_linkage(uint32_t dev_id, uint16_t link_id);
 
 typedef struct {
-	uint8_t		id;
-	uint8_t		param1;
-	uint16_t	param2;
+	uint16_t	id;
+	uint16_t	param;
 } HSB_ACTION_T;
 
 int set_dev_action(uint32_t dev_id, const HSB_ACTION_T *act);
@@ -140,7 +140,7 @@ HSB_DEV_T *find_dev_by_ip(struct in_addr *ip);
 int destroy_dev(HSB_DEV_T *dev);
 int register_dev(HSB_DEV_T *dev);
 int remove_dev(HSB_DEV_T *dev);
-int update_dev_status(HSB_DEV_T *dev, uint32_t *status);
+int dev_status_updated(HSB_DEV_T *dev, HSB_STATUS_T *status);
 
 int register_dev_drv(HSB_DEV_DRV_T *drv);
 

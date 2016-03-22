@@ -272,7 +272,7 @@ static int _refresh_device(HSB_DEV_T *pdev)
 
 static int _update_status(HSB_DEV_T *pdev, uint32_t *status)
 {
-	update_dev_status(pdev, status);
+	dev_status_updated(pdev, (HSB_STATUS_T *)status);
 	
 	return 0;
 }

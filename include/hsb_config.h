@@ -20,6 +20,8 @@
 #define MAXLINE 1024UL
 #define MAXPATH 256UL
 
+#define CHECK_BIT(a, b)		(a & (1 << b))
+
 typedef struct {
 	char *pid_file ;
 	char *unix_listen_path;	
