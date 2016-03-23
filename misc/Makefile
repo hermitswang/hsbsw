@@ -24,7 +24,7 @@ switch_probe : switch_probe.o $(HSB_LIBS)
 .PHONY: dep  all
 
 all :  ${TARGET} 
-	cp ${TARGET} ${EXEDIR}
+	#cp ${TARGET} ${EXEDIR}
 	
 %.o: %.c
 	${CC} ${CFLAGS} -c $<

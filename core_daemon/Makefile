@@ -13,7 +13,7 @@ ${TARGET}:  ${OBJS} $(HSB_LIBS)
 .PHONY: dep 
 
 all :  ${TARGET} 
-	cp $(TARGET) ${EXEDIR}
+	#cp $(TARGET) ${EXEDIR}
 	
 %.o: %.c
 	${CC} ${CFLAGS} -c $<
