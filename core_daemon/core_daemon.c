@@ -69,7 +69,7 @@ again:
 		if (dla.recv_time != 0) {
 			goto again;
 		} else {
-
+			check_timer_and_delay();
 		}
 	}
 

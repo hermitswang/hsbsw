@@ -108,9 +108,9 @@ static int  _reply_get_timer(uint8_t *buf, uint32_t dev_id, HSB_TIMER_T *tm)
 	SET_CMD_FIELD(buf, 10, uint8_t, tm->work_mode);
 	SET_CMD_FIELD(buf, 11, uint8_t, tm->flag);
 	SET_CMD_FIELD(buf, 12, uint8_t, tm->hour);
-	SET_CMD_FIELD(buf, 13, uint8_t, tm->minute);
-	SET_CMD_FIELD(buf, 14, uint8_t, tm->second);
-	SET_CMD_FIELD(buf, 15, uint8_t, tm->weekday);
+	SET_CMD_FIELD(buf, 13, uint8_t, tm->min);
+	SET_CMD_FIELD(buf, 14, uint8_t, tm->sec);
+	SET_CMD_FIELD(buf, 15, uint8_t, tm->wday);
 	SET_CMD_FIELD(buf, 16, uint16_t, tm->act_id);
 	SET_CMD_FIELD(buf, 18, uint16_t, tm->act_param);
 
@@ -173,41 +173,19 @@ static int _get_dev_status(uint8_t *buf, int len, HSB_STATUS_T *status, int *num
 	return 0;
 }
 
-#if 0
-static int _notify_dev_status_updated(uint8_t *buf, uint32_t dev_id, uint32_t *status)
+static int _notify_dev_event(uint8_t *buf, HSB_EVT_T *evt)
 {
-	int len = 16;
+	int len = 12;
 
-	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_STATUS_UPDATED, len);
+	MAKE_CMD_HDR(buf, HSB_CMD_EVENT, len);
 
-	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
-	SET_CMD_FIELD(buf, 8, uint32_t, *status);
+	SET_CMD_FIELD(buf, 4, uint32_t, evt->devid);
+	SET_CMD_FIELD(buf, 8, uint8_t, evt->id);
+	SET_CMD_FIELD(buf, 9, uint8_t, evt->param1);
+	SET_CMD_FIELD(buf, 10, uint16_t, evt->param2);
 
 	return len;
 }
-
-static int _notify_dev_added(uint8_t *buf, uint32_t dev_id)
-{
-	int len = 16;
-
-	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_ADDED, len);
-
-	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
-
-	return len;
-}
-
-static int _notify_dev_deled(uint8_t *buf, uint32_t dev_id)
-{
-	int len = 16;
-
-	MAKE_CMD_HDR(buf, HSB_CMD_DEVICE_DELED, len);
-
-	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
-
-	return len;
-}
-#endif
 
 int deal_tcp_packet(int fd, uint8_t *buf, int len)
 {
@@ -301,9 +279,9 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			tm.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
 			tm.flag = GET_CMD_FIELD(buf, 11, uint8_t);
 			tm.hour = GET_CMD_FIELD(buf, 12, uint8_t);
-			tm.minute = GET_CMD_FIELD(buf, 13, uint8_t);
-			tm.second = GET_CMD_FIELD(buf, 14, uint8_t);
-			tm.weekday = GET_CMD_FIELD(buf, 15, uint8_t);
+			tm.min = GET_CMD_FIELD(buf, 13, uint8_t);
+			tm.sec = GET_CMD_FIELD(buf, 14, uint8_t);
+			tm.wday = GET_CMD_FIELD(buf, 15, uint8_t);
 			tm.act_id = GET_CMD_FIELD(buf, 16, uint16_t);
 			tm.act_param = GET_CMD_FIELD(buf, 18, uint16_t);
 
@@ -413,10 +391,11 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
 			HSB_ACTION_T act = { 0 };
 
+			act.devid = dev_id;
 			act.id = GET_CMD_FIELD(buf, 8, uint16_t);
 			act.param = GET_CMD_FIELD(buf, 10, uint16_t);
 
-			ret = set_dev_action(dev_id, &act);
+			ret = set_dev_action(&act);
 			rlen = _reply_result(reply_buf, ret);
 			break;
 		}
@@ -545,19 +524,6 @@ typedef struct {
 	GQueue queue;
 	int using;
 } tcp_client_context;
-
-typedef enum {
-	NOTIFY_TYPE_DEVICE_STATUS_UPDATED = 0,
-	NOTIFY_TYPE_DEVICE_ADDED,
-	NOTIFY_TYPE_DEVICE_DELED,
-	NOTIFY_TYPE_LAST,
-} NOTIFY_TYPE_T;
-
-typedef struct {
-	NOTIFY_TYPE_T	type;
-	uint32_t	dev_id;
-	uint32_t	status;
-} notify_msg;
 
 typedef struct {
 	tcp_client_context	context[MAX_TCP_CLIENT_NUM];
@@ -689,42 +655,23 @@ static void *tcp_listen_thread(void *arg)
 
 static int _process_notify(int fd, tcp_client_context *pctx)
 {
-	notify_msg *notify;
-	uint8_t buf[16];
-	int ret, len = sizeof(buf);
+	HSB_EVT_T *evt;
+	uint8_t buf[32];
+	int ret, len;
 
 	while (!g_queue_is_empty(&pctx->queue)) {
-		notify = g_queue_peek_head(&pctx->queue);
+		evt = g_queue_peek_head(&pctx->queue);
 
 		memset(buf, 0, sizeof(buf));
-		switch (notify->type) {
-#if 0 // TODO
-			case NOTIFY_TYPE_DEVICE_STATUS_UPDATED:
-			{
-				_notify_dev_status_updated(buf, notify->dev_id, &notify->status);
-				break;
-			}
-			case NOTIFY_TYPE_DEVICE_ADDED:
-			{
-				_notify_dev_added(buf, notify->dev_id);
-				break;
-			}
-			case NOTIFY_TYPE_DEVICE_DELED:
-			{
-				_notify_dev_deled(buf, notify->dev_id);
-				break;
-			}
-#endif
-			default:
-				break;
-		}
+
+		len = _notify_dev_event(buf, evt);
 
 		ret = write(fd, buf, len);
 		if (ret <= 0)
 			return ret;
 
 		g_queue_pop_head(&pctx->queue);
-		g_slice_free(notify_msg, notify);
+		g_slice_free(HSB_EVT_T, evt);
 	}
 
 	return 0;
@@ -781,7 +728,7 @@ static void tcp_client_handler(gpointer data, gpointer user_data)
 
 #define NOTIFY_MESSAGE	"notify"
 
-static void _notify(notify_msg *msg)
+static void _notify(HSB_EVT_T *msg)
 {
 	int cnt, fd;
 	tcp_client_context *pctx = NULL;
@@ -803,49 +750,13 @@ static void _notify(notify_msg *msg)
 	}
 }
 
-int notify_dev_status_updated(uint32_t dev_id, uint32_t *status)
+int notify_dev_event(HSB_EVT_T *evt)
 {
-	notify_msg *notify = g_slice_new0(notify_msg);
+	HSB_EVT_T *notify = g_slice_dup(HSB_EVT_T, evt);
 	if (!notify) {
 		hsb_critical("alloc notify fail\n");
 		return -1;
 	}
-
-	notify->type = NOTIFY_TYPE_DEVICE_STATUS_UPDATED;
-	notify->dev_id = dev_id;
-	notify->status = *status;
-
-	_notify(notify);
-
-	return 0;
-}
-
-int notify_dev_added(uint32_t dev_id)
-{
-	notify_msg *notify = g_slice_new0(notify_msg);
-	if (!notify) {
-		hsb_critical("alloc notify fail\n");
-		return -1;
-	}
-
-	notify->type = NOTIFY_TYPE_DEVICE_ADDED;
-	notify->dev_id = dev_id;
-
-	_notify(notify);
-
-	return 0;
-}
-
-int notify_dev_deled(uint32_t dev_id)
-{
-	notify_msg *notify = g_slice_new0(notify_msg);
-	if (!notify) {
-		hsb_critical("alloc notify fail\n");
-		return -1;
-	}
-
-	notify->type = NOTIFY_TYPE_DEVICE_DELED;
-	notify->dev_id = dev_id;
 
 	_notify(notify);
 

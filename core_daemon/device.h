@@ -8,13 +8,32 @@
 #include "net_protocol.h"
 #include "hsb_device.h"
 
+typedef struct {
+	uint32_t	devid;
+	uint16_t	id;
+	uint16_t	param;
+} HSB_ACTION_T;
+
+typedef struct {
+	uint32_t	devid;
+	uint8_t		id;
+	uint8_t		param1;
+	uint16_t	param2;
+} HSB_EVT_T;
+
+typedef struct {
+	uint16_t	id;
+	uint16_t	val;
+} HSB_STATUS_T;
+
 struct _HSB_DEV_T;
 struct _HSB_DEV_DRV_T;
 
 typedef struct {
 	int (*probe)(void);
 	int (*get_status)(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int *num);
-	int (*set_status)(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int num);
+	int (*set_status)(struct _HSB_DEV_T *pdev, const HSB_STATUS_T *status, int num);
+	int (*set_action)(struct _HSB_DEV_T *pdev, const HSB_ACTION_T *act);
 } HSB_DEV_OP_T;
 
 typedef struct _HSB_DEV_DRV_T {
@@ -29,9 +48,9 @@ typedef struct _HSB_TIMER_T {
 	uint8_t		work_mode;
 	uint8_t		flag;
 	uint8_t		hour;
-	uint8_t		minute;
-	uint8_t		second;
-	uint8_t		weekday;
+	uint8_t		min;
+	uint8_t		sec;
+	uint8_t		wday;
 	uint16_t	act_id;
 	uint16_t	act_param;
 } HSB_TIMER_T;
@@ -56,6 +75,7 @@ typedef struct _HSB_DELAY_T {
 typedef struct {
 	bool		active;
 	bool		started;
+	time_t		start_tm;
 } HSB_DELAY_STATUS_T;
 
 typedef struct _HSB_LINKAGE_T {
@@ -114,7 +134,7 @@ int init_dev_module(void);
 int get_dev_id_list(uint32_t *dev_id, int *dev_num);
 int get_dev_info(uint32_t dev_id, HSB_DEV_T *dev);
 int get_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int *num);
-int set_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int num);
+int set_dev_status(uint32_t dev_id, const HSB_STATUS_T *status, int num);
 int probe_dev(uint32_t drv_id);
 
 
@@ -128,23 +148,25 @@ int get_dev_linkage(uint32_t dev_id, uint16_t link_id, HSB_LINKAGE_T *link);
 int set_dev_linkage(uint32_t dev_id, const HSB_LINKAGE_T *link);
 int del_dev_linkage(uint32_t dev_id, uint16_t link_id);
 
-typedef struct {
-	uint16_t	id;
-	uint16_t	param;
-} HSB_ACTION_T;
-
-int set_dev_action(uint32_t dev_id, const HSB_ACTION_T *act);
+int set_dev_action(const HSB_ACTION_T *act);
 
 HSB_DEV_T *create_dev(void);
 HSB_DEV_T *find_dev_by_ip(struct in_addr *ip);
 int destroy_dev(HSB_DEV_T *dev);
 int register_dev(HSB_DEV_T *dev);
 int remove_dev(HSB_DEV_T *dev);
-int dev_status_updated(HSB_DEV_T *dev, HSB_STATUS_T *status);
+
+int dev_status_updated(uint32_t devid, HSB_STATUS_T *status);
+int dev_updated(uint32_t devid, HSB_DEV_UPDATED_TYPE_T type);
+int dev_sensor_triggered(uint32_t devid, HSB_SENSOR_TYPE_T type);
+int dev_sensor_recovered(uint32_t devid, HSB_SENSOR_TYPE_T type);
+int dev_mode_changed(HSB_WORK_MODE_T mode);
 
 int register_dev_drv(HSB_DEV_DRV_T *drv);
 
 int init_virtual_switch_drv(void);
+
+int check_timer_and_delay(void);
 
 #endif
 

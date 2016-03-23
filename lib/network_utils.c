@@ -174,6 +174,13 @@ int open_udp_clientfd(void)
 	return socket(AF_INET, SOCK_DGRAM, 0);
 }
 
+void make_sockaddr(struct sockaddr_in *dst, const struct in_addr *addr, unsigned short port)
+{
+	dst->sin_family = AF_INET;
+	dst->sin_port = htons(port);
+	memcpy(&dst->sin_addr, addr, sizeof(*addr));
+}
+
 int set_broadcast(int sockfd, bool enable)
 {
 	const int on = enable ? 1 : 0;

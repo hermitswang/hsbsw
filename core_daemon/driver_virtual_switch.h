@@ -21,7 +21,5 @@ typedef enum {
 	VS_CMD_LAST,
 } VS_CMD_T;
 
-
-
 #endif
 

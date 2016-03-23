@@ -33,10 +33,5 @@ typedef enum {
 
 #define HSB_CMD_VALID(x)	(x >= HSB_CMD_BOX_DISCOVER && x < HSB_CMD_LAST)
 
-typedef struct {
-	uint16_t	id;
-	uint16_t	val;
-} HSB_STATUS_T;
-
 #endif
 

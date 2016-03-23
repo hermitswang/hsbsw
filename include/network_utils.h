@@ -19,6 +19,8 @@ int open_tcp_listenfd(unsigned short port);
 
 int open_udp_listenfd(unsigned short port);
 int open_udp_clientfd(void);
+void make_sockaddr(struct sockaddr_in *dst, const struct in_addr *addr, unsigned short port);
+
 int set_broadcast(int sockfd, bool enable);
 int get_broadcast_address(int sockfd, const char *eth_intf, struct in_addr *addr);
 
