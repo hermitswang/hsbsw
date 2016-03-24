@@ -21,5 +21,7 @@ typedef enum {
 	VS_CMD_LAST,
 } VS_CMD_T;
 
+#define MIN_VS_CMD_LEN		(2)
+
 #endif
 

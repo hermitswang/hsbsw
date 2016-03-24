@@ -10,6 +10,8 @@ typedef struct {
 	GQueue		queue;
 	GMutex		mutex;
 
+	GQueue		offq;
+
 	GQueue		driverq;
 	uint32_t	dev_id;
 
@@ -140,6 +142,9 @@ int set_dev_status(uint32_t dev_id, const HSB_STATUS_T *status, int num)
 	int ret;
 
 	HSB_DEV_T *pdev = NULL;
+
+	if (0 == dev_id && status->id == HSB_STATUS_TYPE_WORK_MODE)
+		return set_box_work_mode(status->val);
 
 	HSB_DEVICE_CB_LOCK();
 
@@ -298,8 +303,12 @@ HSB_DEV_T *find_dev_by_ip(struct in_addr *ip)
 HSB_DEV_T *create_dev(void)
 {
 	HSB_DEV_T *pdev = g_slice_new0(HSB_DEV_T);
-	if (pdev)
-		pdev->id = alloc_dev_id();
+	if (!pdev)
+		return NULL;
+
+	/* set default value */
+	pdev->id = alloc_dev_id();
+	pdev->work_mode = HSB_WORK_MODE_ALL;
 
 	return pdev;
 }
@@ -348,6 +357,8 @@ static _dev_event(uint32_t devid, HSB_EVT_TYPE_T type, uint8_t param1, uint16_t 
 	evt.param1 = param1;
 	evt.param2 = param2;
 
+	hsb_debug("get event: %d, %d, %d, %d\n", devid, type, param1, param2);
+
 	return notify_dev_event(&evt);
 }
 
@@ -374,6 +385,24 @@ int dev_sensor_recovered(uint32_t devid, HSB_SENSOR_TYPE_T type)
 int dev_mode_changed(HSB_WORK_MODE_T mode)
 {
 	return _dev_event(0, HSB_EVT_TYPE_MODE_CHANGED, mode, 0);
+}
+
+int set_box_work_mode(HSB_WORK_MODE_T mode)
+{
+	int ret = HSB_E_OK;
+	if (!HSB_WORK_MODE_VALID(mode))
+		return HSB_E_BAD_PARAM;
+
+	gl_device_cb.work_mode = mode;
+
+	dev_mode_changed(mode);
+
+	return ret;
+}
+
+HSB_WORK_MODE_T get_box_work_mode(void)
+{
+	return gl_device_cb.work_mode;
 }
 
 static void probe_all_devices(void)

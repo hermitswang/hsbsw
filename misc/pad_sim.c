@@ -14,57 +14,134 @@
 
 static int deal_tcp_pkt(int fd, void *buf, size_t count)
 {
+	int cnt;
+	uint32_t dev_id;
+
 	uint16_t cmd = GET_CMD_FIELD(buf, 0, uint16_t);
 	uint16_t len = GET_CMD_FIELD(buf, 2, uint16_t);
 
 	switch (cmd) {
-		case TCP_CMD_GET_DEVICES_RESP:
+		case HSB_CMD_GET_DEVS_RESP:
 		{
-			int cnt;
-			uint32_t dev_id;
 			printf("get devices response:\n");
 			for (cnt = 0; cnt < (len - 4) / 4; cnt++)
 			{
 				dev_id = GET_CMD_FIELD(buf, 4 + cnt*4, uint32_t);
-				printf("%d\n", dev_id);
+				printf("dev: %d\n", dev_id);
 			}
 			break;
-			case TCP_CMD_GET_DEVICE_STATUS_RESP:
-			{
-				uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-				uint32_t status = GET_CMD_FIELD(buf, 8, uint32_t);
-				printf("get device status response: dev_id=%d, status=%d\n", dev_id, status);
-				break;
+		}
+		case HSB_CMD_GET_INFO_RESP:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint32_t drvid = GET_CMD_FIELD(buf, 8, uint32_t);
+			uint16_t dev_class = GET_CMD_FIELD(buf, 12, uint16_t);
+			uint16_t interface = GET_CMD_FIELD(buf, 14, uint16_t);
+
+			uint8_t mac[6];
+			memcpy(mac, buf + 16, 6);
+
+			printf("dev info: id=%d, drv=%d, class=%d, interface=%d, mac=%02X:%02X:%02X:%02X:%02X:%02X\n",
+				dev_id, drvid, dev_class, interface, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			break;
+		}
+		case HSB_CMD_GET_STATUS_RESP:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t id, val;
+
+			for (cnt = 0; cnt < (len - 8) / 4; cnt++) {
+				id = GET_CMD_FIELD(buf, 8 + cnt * 4, uint16_t);
+				val = GET_CMD_FIELD(buf, 10 + cnt * 4, uint16_t);
+				printf("get device %d status response: status %d=%d\n", dev_id, id, val);
 			}
-			case TCP_CMD_DEVICE_STATUS_UPDATED:
-			{
-				uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-				uint32_t status = GET_CMD_FIELD(buf, 8, uint32_t);
-				printf("device status updated: dev_id=%d, status=%d\n", dev_id, status);
-				break;
-			}
-			case TCP_CMD_DEVICE_ADDED:
-			{
-				uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-				printf("device added: dev_id=%d\n", dev_id);
-				break;
-			}
-			case TCP_CMD_DEVICE_DELED:
-			{
-				uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-				printf("device deled: dev_id=%d\n", dev_id);
-				break;
-			}
-			case TCP_CMD_RESULT:
-			{
-				uint16_t result = GET_CMD_FIELD(buf, 4, uint16_t);
-				printf("result=%d\n", result);
-				break;
-			}
-			default:
-			{
-				printf("unknown cmd: %x\n", cmd);
-			}
+
+			break;
+		}
+		case HSB_CMD_GET_TIMER_RESP:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+
+			uint16_t timer_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			uint8_t work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			uint8_t flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			uint8_t hour = GET_CMD_FIELD(buf, 12, uint8_t);
+			uint8_t min = GET_CMD_FIELD(buf, 13, uint8_t);
+			uint8_t sec = GET_CMD_FIELD(buf, 14, uint8_t);
+			uint8_t wday = GET_CMD_FIELD(buf, 15, uint8_t);
+			uint8_t act_id = GET_CMD_FIELD(buf, 16, uint8_t);
+			uint8_t act_param1 = GET_CMD_FIELD(buf, 17, uint8_t);
+			uint16_t act_param2 = GET_CMD_FIELD(buf, 18, uint16_t);
+
+			printf("get dev %d timer info:\n", dev_id);
+			printf("id=%d, work_mode=%d, flag=%02x, hour=%d, min=%d, sec=%d, wday=%02x\n",
+				timer_id, work_mode, flag, hour, min, sec, wday);
+			printf("act: %d, param1=%d, param2=%d\n", act_id, act_param1, act_param2);
+			break;
+		}
+		case HSB_CMD_GET_DELAY_RESP:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+
+			uint16_t delay_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			uint8_t work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			uint8_t flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			uint8_t evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
+			uint8_t evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
+			uint16_t evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
+			uint8_t act_id = GET_CMD_FIELD(buf, 16, uint8_t);
+			uint8_t act_param1 = GET_CMD_FIELD(buf, 17, uint8_t);
+			uint16_t act_param2 = GET_CMD_FIELD(buf, 18, uint16_t);
+			uint32_t delay_sec = GET_CMD_FIELD(buf, 20, uint32_t);
+
+			printf("get dev %d delay info:\n", dev_id);
+			printf("id=%d, work_mode=%d, flag=%d, delay=%d\n", delay_id, work_mode, flag, delay_sec);
+			printf("evt id=%d, param1=%d, param2=%d\n", evt_id, evt_param1, evt_param2);
+			printf("act id=%d, param1=%d, param2=%d\n", act_id, act_param1, act_param2);
+			break;
+		}
+		case HSB_CMD_GET_LINKAGE_RESP:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+
+			uint16_t link_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			uint8_t work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
+			uint8_t flag = GET_CMD_FIELD(buf, 11, uint8_t);
+			uint8_t evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
+			uint8_t evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
+			uint16_t evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
+			uint32_t act_devid = GET_CMD_FIELD(buf, 16, uint32_t);
+			uint8_t act_id = GET_CMD_FIELD(buf, 20, uint8_t);
+			uint8_t act_param1 = GET_CMD_FIELD(buf, 21, uint8_t);
+			uint16_t act_param2 = GET_CMD_FIELD(buf, 22, uint16_t);
+
+			printf("get dev %d linkage info:\n", dev_id);
+			printf("id=%d, work_mode=%d, flag=%d, link devid=%d\n", link_id, work_mode, flag, act_devid);
+			printf("evt id=%d, param1=%d, param2=%d\n", evt_id, evt_param1, evt_param2);
+			printf("act id=%d, param1=%d, param2=%d\n", act_id, act_param1, act_param2);
+
+			break;
+		}
+		case HSB_CMD_EVENT:
+		{
+			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint8_t evt_id = GET_CMD_FIELD(buf, 8, uint8_t);
+			uint8_t evt_param1 = GET_CMD_FIELD(buf, 9, uint8_t);
+			uint16_t evt_param2 = GET_CMD_FIELD(buf, 10, uint16_t);
+
+			printf("dev %d event: id=%d, param1=%d, param2=%d\n", dev_id, evt_id, evt_param1, evt_param2);
+			break;
+		}
+		case HSB_CMD_RESULT:
+		{
+			uint16_t result = GET_CMD_FIELD(buf, 4, uint16_t);
+			printf("result=%d\n", result);
+			break;
+		}
+		default:
+		{
+			printf("unknown cmd: %x\n", cmd);
+			break;
 		}
 	}
 
@@ -74,29 +151,80 @@ static int deal_tcp_pkt(int fd, void *buf, size_t count)
 static int deal_input_cmd(int fd, void *buf, size_t count)
 {
 	uint8_t rbuf[16];
-	int len = sizeof(rbuf);
+	int len;
 	uint32_t dev_id;
 	uint32_t status;
 	uint16_t drv_id;
+	uint16_t timer_id;
+	uint8_t evt_id;
+	uint8_t evt_param1;
+	uint16_t evt_param2;
+	uint8_t act_id;
+	uint8_t act_param1;
+	uint16_t act_param2;
 
 	memset(rbuf, 0, sizeof(rbuf));
 
 	if (!strncmp(buf, "get devices", 11)) {
-		SET_CMD_FIELD(rbuf, 0, uint16_t, TCP_CMD_GET_DEVICES);
+		len = 4;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_DEVS);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+	} else if (1 == sscanf(buf, "get info %d", &dev_id)) {
+		len = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_INFO);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
 	} else if (1 == sscanf(buf, "get status %d", &dev_id)) {
-		SET_CMD_FIELD(rbuf, 0, uint16_t, TCP_CMD_GET_DEVICE_STATUS);
+		len = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_STATUS);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
 		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
 	} else if (2 == sscanf(buf, "set status %d %d", &dev_id, &status)) {
-		SET_CMD_FIELD(rbuf, 0, uint16_t, TCP_CMD_SET_DEVICE_STATUS);
+		len = 12;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_SET_STATUS);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
 		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
 		SET_CMD_FIELD(rbuf, 8, uint32_t, status);
+	} else if (2 == sscanf(buf, "get timer %d %d", &dev_id, &timer_id)) {
+		len = 12;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_TIMER);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
+		SET_CMD_FIELD(rbuf, 8, uint16_t, timer_id);
+	} else if (2 == sscanf(buf, "set timer %d %d", &dev_id, &timer_id)) {
+		len = 20;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_TIMER);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
+		SET_CMD_FIELD(rbuf, 8, uint16_t, timer_id);
+		SET_CMD_FIELD(rbuf, 10, uint8_t, 0xff);
+		SET_CMD_FIELD(rbuf, 11, uint8_t, 0);
+		SET_CMD_FIELD(rbuf, 12, uint8_t, 12); /* hour */
+		SET_CMD_FIELD(rbuf, 13, uint8_t, 30); /* min */
+		SET_CMD_FIELD(rbuf, 14, uint8_t, 0);  /* sec */
+		SET_CMD_FIELD(rbuf, 15, uint8_t, 0x7F);
+		SET_CMD_FIELD(rbuf, 16, uint8_t, 0); /* on_off */
+		SET_CMD_FIELD(rbuf, 17, uint8_t, 1);
+		SET_CMD_FIELD(rbuf, 18, uint16_t, 0);
+	} else if (2 == sscanf(buf, "del timer %d %d", &dev_id, &timer_id)) {
+		len = 12;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_GET_TIMER);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+		SET_CMD_FIELD(rbuf, 4, uint32_t, dev_id);
+		SET_CMD_FIELD(rbuf, 8, uint16_t, timer_id);
 	} else if (1 == sscanf(buf, "probe %d", &drv_id)) {
-		SET_CMD_FIELD(rbuf, 0, uint16_t, TCP_CMD_PROBE_DEVICE);
+		len = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_PROBE_DEV);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
 		SET_CMD_FIELD(rbuf, 4, uint16_t, drv_id);
+	} else if (4 == sscanf(buf, "action %d %d %d %d", &dev_id, &act_id, &act_param1, &act_param2)) {
+		len = 12;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_DO_ACTION);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
+		SET_CMD_FIELD(rbuf, 4, uint16_t, dev_id);
+		SET_CMD_FIELD(rbuf, 8, uint8_t, act_id);
+		SET_CMD_FIELD(rbuf, 9, uint8_t, act_param1);
+		SET_CMD_FIELD(rbuf, 10, uint16_t, act_param2);
 	} else {
 		printf("invalid cmd\n");
 		return -1;
@@ -182,17 +310,17 @@ static int probe_box(struct in_addr *addr)
 
 	memset(sendline, 0, sizeof(sendline));
 
-	int send_len = 16;
-	SET_CMD_FIELD(sendline, 0, uint16_t, 0x8801);
+	int send_len = 8;
+	SET_CMD_FIELD(sendline, 0, uint16_t, HSB_CMD_BOX_DISCOVER);
 	SET_CMD_FIELD(sendline, 2, uint16_t, send_len);
 	SET_CMD_FIELD(sendline, 4, uint8_t, 0);
 	SET_CMD_FIELD(sendline, 5, uint8_t, 1);
-	SET_CMD_FIELD(sendline, 8, uint32_t, 1);
+	SET_CMD_FIELD(sendline, 6, uint16_t, 1);
 
 	ret = sendto(sockfd, sendline, send_len, 0, (struct sockaddr *)&servaddr, servlen);
 
 	struct timeval tv = { 2, 0 };
-	n = recvfrom_timeout(sockfd, recvline, 1024, (struct sockaddr *)&baddr, &blen, &tv);
+	n = recvfrom_timeout(sockfd, recvline, sizeof(recvline), (struct sockaddr *)&baddr, &blen, &tv);
 	if (n <= 0) {
 		close(sockfd);
 		return -2;
@@ -202,7 +330,7 @@ static int probe_box(struct in_addr *addr)
 
 	uint16_t cmd = GET_CMD_FIELD(recvline, 0, uint16_t);
 	uint16_t len = GET_CMD_FIELD(recvline, 2, uint16_t);
-	bid = GET_CMD_FIELD(recvline, 8, uint32_t);
+	bid = GET_CMD_FIELD(recvline, 6, uint16_t);
 
 	printf("cmd: %x, len: %d, bid: %d\n", cmd, len, bid);
 

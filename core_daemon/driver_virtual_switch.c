@@ -26,44 +26,20 @@ typedef struct {
 } VS_INFO;
 
 typedef enum {
+	VS_EVT_TYPE_SENSOR_TRIGGERED,
+	VS_EVT_TYPE_SENSOR_RECOVERED,
+	VS_EVT_TYPE_KEY_PRESSED,
+} VS_EVT_TYPE_T;
+
+typedef enum {
 	VS_STATUS_TYPE_ON_OFF = 1,
 	VS_STATUS_TYPE_RO_DOOR = 16,
 } VS_STATUS_TYPE_T;
-
-void _vs_status_to_dev_status(uint8_t id, uint16_t val, uint16_t *status_id, uint16_t *status_val)
-{
-	switch (id) {
-		case VS_STATUS_TYPE_ON_OFF:
-			*status_id = HSB_STATUS_TYPE_ON_OFF;
-			*status_val = val;
-			break;
-		case VS_STATUS_TYPE_RO_DOOR:
-			*status_id = HSB_STATUS_TYPE_SENSOR;
-			*status_val = val;
-		default:
-			hsb_debug("error vs status id: %d\n", id);
-			break;
-	}
-}
-
-void _dev_status_to_vs_status(uint16_t status_id, uint16_t status_val, uint8_t *id, uint16_t *val)
-{
-	switch (status_id) {
-		case HSB_STATUS_TYPE_ON_OFF:
-			*id = VS_STATUS_TYPE_ON_OFF;
-			*val = status_val;
-			break;
-		default:
-			hsb_debug("error dev status id: %d\n", status_id);
-			break;
-	}
-}
 
 static HSB_DEVICE_DRIVER_CONTEXT_T gl_ctx = { 0 };
 
 static HSB_DEV_DRV_T virtual_switch_drv;
 static int _register_device(struct in_addr *addr);
-static int _update_status(HSB_DEV_T *pdev, HSB_STATUS_T *status);
 
 static int virtual_switch_probe(void)
 {
@@ -72,7 +48,7 @@ static int virtual_switch_probe(void)
 	socklen_t devlen = sizeof(devaddr);
 	uint8_t sbuf[64], rbuf[64];
 	int ret;
-	size_t count = 16;
+	size_t count = 0;
 
 	hsb_debug("probe virtual switch\n");
 
@@ -91,6 +67,7 @@ static int virtual_switch_probe(void)
 	set_broadcast(sockfd, true);
 
 	memset(sbuf, 0, sizeof(sbuf));
+	count = 8;
 	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_DEVICE_DISCOVER);
 	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
 
@@ -127,122 +104,115 @@ static int virtual_switch_probe(void)
 	return 0;
 }
 
-static int virtual_switch_set_status(struct _HSB_DEV_T *pdev, const HSB_STATUS_T *status, int num)
+static int _transfer(HSB_DEV_T *pdev, uint8_t *wbuf, size_t wlen, uint8_t *rbuf, size_t rlen)
 {
 	struct sockaddr_in servaddr;
 	socklen_t slen = sizeof(servaddr);
-	uint8_t sbuf[64], rbuf[64];
 	int ret;
-	size_t count;
 
 	int sockfd = open_udp_clientfd();
 
 	make_sockaddr(&servaddr, &pdev->prty.ip, VIRTUAL_SWITCH_LISTEN_PORT);
 
-	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_SET_STATUS);
-	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
-
-	uint8_t vs_id;
-	uint8_t vs_len = 2;
-	uint16_t vs_val;
-	int id;
-	count = 4;
-	for (id = 0; id < num; id++) {
-		_dev_status_to_vs_status(status->id, status->val, &vs_id, &vs_val);
-
-		SET_CMD_FIELD(sbuf, 4 + id * 4, uint8_t, vs_id);
-		SET_CMD_FIELD(sbuf, 5 + id * 4, uint8_t, vs_len);
-		SET_CMD_FIELD(sbuf, 6 + id * 4, uint16_t, vs_val);
-
-		status++;
-		count += 4;
-	}
-
-	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
+	sendto(sockfd, wbuf, wlen, 0, (struct sockaddr *)&servaddr, slen);
 
 	struct timeval tv = { 3, 0 };
-	ret = recvfrom_timeout(sockfd, rbuf, sizeof(rbuf), NULL, NULL, &tv);
+	ret = recvfrom_timeout(sockfd, rbuf, rlen, NULL, NULL, &tv);
 
-	if (ret < count) {
-		hsb_critical("set status: get err pkt, len=%d\n", ret);
+	if (ret <= 0) {
+		hsb_critical("_transfer: get err pkt, len=%d\n", ret);
 		close(sockfd);
 		return -1;
 	}
 
-	int cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
-	int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
+	close(sockfd);
+
+	return ret;
+}
+
+static int virtual_switch_set_status(struct _HSB_DEV_T *pdev, const HSB_STATUS_T *status, int num)
+{
+	int ret, len;
+	uint8_t wbuf[64];
+	uint8_t rbuf[64];
+	HSB_STATUS_T *pstat = (HSB_STATUS_T *)status;
+
+	len = 4 + 4 * num;
+	memset(wbuf, 0, sizeof(wbuf));
+	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_SET_STATUS);
+	SET_CMD_FIELD(wbuf, 2, uint16_t, len);
+
+	int id;
+	for (id = 0; id < num; id++) {
+		SET_CMD_FIELD(wbuf, 4 + id * 4, uint16_t, pstat->id);
+		SET_CMD_FIELD(wbuf, 6 + id * 4, uint16_t, pstat->val);
+
+		pstat++;
+	}
+
+	ret = _transfer(pdev, wbuf, len, rbuf, sizeof(rbuf));
+
+	if (ret < MIN_VS_CMD_LEN) {
+		hsb_critical("set status: get err pkt, len=%d\n", ret);
+		return -1;
+	}
+
+	uint16_t cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
+	uint16_t rlen = GET_CMD_FIELD(rbuf, 2, uint16_t);
 	uint16_t result = GET_CMD_FIELD(rbuf, 4, uint16_t);
 
-	if (cmd != VS_CMD_RESULT || len != ret) {
-		hsb_critical("set status: get err pkt, cmd=%x, len=%d\n", cmd, len);
-		close(sockfd);
+	if (cmd != VS_CMD_RESULT || rlen != ret) {
+		hsb_critical("set status: get err pkt, cmd=%x, len=%d\n", cmd, rlen);
 		return -2;
 	}
 
 	if (!result) {
 		hsb_debug("set status result=%d\n", result);
-		close(sockfd);
 		return -3;
 	}
 
-	hsb_debug("send set status[%d] to device done\n", *status);
-
-	close(sockfd);
+	hsb_debug("send set status to device done\n");
 
 	return 0;
 }
 
 static int virtual_switch_get_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int *num)
 {
-	struct sockaddr_in servaddr;
-	socklen_t slen = sizeof(servaddr);
-	uint8_t sbuf[64], rbuf[64];
-	int ret;
-	size_t count = 8;
+	uint8_t wbuf[64], rbuf[64];
+	int ret, len;
 
-	int sockfd = open_udp_clientfd();
+	memset(wbuf, 0, sizeof(wbuf));
+	len = 12;
+	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_GET_STATUS);
+	SET_CMD_FIELD(wbuf, 2, uint16_t, 12);
+	SET_CMD_FIELD(wbuf, 4, uint32_t, 0xffffffff);
 
-	make_sockaddr(&servaddr, &pdev->prty.ip, VIRTUAL_SWITCH_LISTEN_PORT);
+	ret = _transfer(pdev, wbuf, len, rbuf, sizeof(rbuf));
 
-	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_GET_STATUS);
-	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
-	SET_CMD_FIELD(sbuf, 4, uint32_t, 0xffffffff);
-
-	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
-
-	struct timeval tv = { 3, 0 };
-	ret = recvfrom_timeout(sockfd, rbuf, sizeof(rbuf), NULL, NULL, &tv);
-
-	if (ret < count) {
+	if (ret < MIN_VS_CMD_LEN) {
 		hsb_critical("get status: get err pkt, len=%d\n", ret);
-		close(sockfd);
 		return -1;
 	}
 
-	int cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
-	int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
+	uint16_t cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
+	uint16_t rlen = GET_CMD_FIELD(rbuf, 2, uint16_t);
 
-	if (cmd != VS_CMD_GET_STATUS_RESP || ret != len) {
-		hsb_critical("get status: get err pkt, cmd=%x, len=%d\n", cmd, len);
-		close(sockfd);
+	if (cmd != VS_CMD_GET_STATUS_RESP || ret != rlen) {
+		hsb_critical("get status: get err pkt, cmd=%x, len=%d\n", cmd, rlen);
 		return -2;
 	}
 
 	int status_num = 0;
 	uint16_t id, val;
-	count = 4;
+	len = 4;
 
-	while (count + 4 <= len) {
-		id = GET_CMD_FIELD(rbuf, count, uint8_t);
-		val = GET_CMD_FIELD(rbuf, count + 2, uint16_t);
-
-		_vs_status_to_dev_status(id, val, &status->id, &status->val);
+	while (len + 4 <= rlen) {
+		status->id = GET_CMD_FIELD(rbuf, len, uint16_t);
+		status->val = GET_CMD_FIELD(rbuf, len + 2, uint16_t);
 
 		status_num ++;
 		status ++;
-		count += 4;
+		len += 4;
 
 		if (status_num >= *num)
 			break;
@@ -250,63 +220,46 @@ static int virtual_switch_get_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *stat
 
 	*num = status_num;
 
-	close(sockfd);
-	hsb_debug("send get status to device done, status=%d\n", *status);
+	hsb_debug("send get status to device done\n");
 
 	return HSB_E_OK;
 }
 
 static int virtual_switch_set_action(struct _HSB_DEV_T *pdev, const HSB_ACTION_T *act)
 {
-	struct sockaddr_in servaddr;
-	socklen_t slen = sizeof(servaddr);
-	uint8_t sbuf[64], rbuf[64];
-	int ret;
-	size_t count;
+	int ret, len;
+	uint8_t wbuf[64];
+	uint8_t rbuf[64];
 
-	int sockfd = open_udp_clientfd();
+	len = 8;
+	memset(wbuf, 0, sizeof(wbuf));
+	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_DO_ACTION);
+	SET_CMD_FIELD(wbuf, 2, uint16_t, len);
+	SET_CMD_FIELD(wbuf, 4, uint16_t, act->id);
+	SET_CMD_FIELD(wbuf, 6, uint16_t, act->param);
 
-	make_sockaddr(&servaddr, &pdev->prty.ip, VIRTUAL_SWITCH_LISTEN_PORT);
+	ret = _transfer(pdev, wbuf, len, rbuf, sizeof(rbuf));
 
-	memset(sbuf, 0, sizeof(sbuf));
-	SET_CMD_FIELD(sbuf, 0, uint16_t, VS_CMD_DO_ACTION);
-	SET_CMD_FIELD(sbuf, 2, uint16_t, count);
-	SET_CMD_FIELD(sbuf, 4, uint8_t, act->id);
-	SET_CMD_FIELD(sbuf, 5, uint8_t, 2);
-	SET_CMD_FIELD(sbuf, 6, uint16_t, act->param);
-
-	count = 8;
-
-	sendto(sockfd, sbuf, count, 0, (struct sockaddr *)&servaddr, slen);
-
-	struct timeval tv = { 3, 0 };
-	ret = recvfrom_timeout(sockfd, rbuf, sizeof(rbuf), NULL, NULL, &tv);
-
-	if (ret < count) {
+	if (ret < MIN_VS_CMD_LEN) {
 		hsb_critical("set action: get err pkt, len=%d\n", ret);
-		close(sockfd);
 		return -1;
 	}
 
-	int cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
-	int len = GET_CMD_FIELD(rbuf, 2, uint16_t);
+	uint16_t cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
+	uint16_t rlen = GET_CMD_FIELD(rbuf, 2, uint16_t);
 	uint16_t result = GET_CMD_FIELD(rbuf, 4, uint16_t);
 
-	if (cmd != VS_CMD_RESULT || len != ret) {
-		hsb_critical("set action: get err pkt, cmd=%x, len=%d\n", cmd, len);
-		close(sockfd);
+	if (cmd != VS_CMD_RESULT || rlen != ret) {
+		hsb_critical("set action: get err pkt, cmd=%x, len=%d\n", cmd, rlen);
 		return -2;
 	}
 
 	if (!result) {
 		hsb_debug("set action result=%d\n", result);
-		close(sockfd);
 		return -3;
 	}
 
-	hsb_debug("send set action (%d,%d) to device done\n", act->id, act->param);
-
-	close(sockfd);
+	hsb_debug("send set action to device done\n");
 
 	return HSB_E_OK;
 }
@@ -453,16 +406,61 @@ static int _refresh_device(HSB_DEV_T *pdev)
 	return 0;
 }
 
-static int _update_status(HSB_DEV_T *pdev, HSB_STATUS_T *status)
+static int _status_updated(uint32_t devid, uint16_t id, uint16_t val)
 {
-	dev_status_updated(pdev->id, status);
-	
-	return 0;
+	HSB_STATUS_T status;
+	// TODO
+	status.id = id;
+	status.val = val;
+
+	return dev_status_updated(devid, &status);
+}
+
+static int _key(uint16_t key)
+{
+	int ret = HSB_E_OK;
+
+	switch (key) {
+		case HSB_WORK_MODE_HOME:
+		case HSB_WORK_MODE_OUTSIDE:
+		case HSB_WORK_MODE_GUARD:
+			ret = set_box_work_mode(key);
+			break;
+		default:
+			hsb_debug("get undefined key %d\n", key);
+			ret = HSB_E_OTHERS;
+			break;
+	}
+
+	return ret;
+}
+
+static int _event(uint32_t devid, uint16_t id, uint16_t param)
+{
+	int ret = HSB_E_OK;
+
+	switch (id) {
+		case VS_EVT_TYPE_SENSOR_TRIGGERED:
+			ret = dev_sensor_triggered(devid, param);
+			break;
+		case VS_EVT_TYPE_SENSOR_RECOVERED:
+			ret = dev_sensor_recovered(devid, param);
+			break;
+		case VS_EVT_TYPE_KEY_PRESSED:
+			ret = _key(param);
+			break;
+		default:
+			hsb_debug("unknown event %x\n", id);
+			ret = HSB_E_OTHERS;
+			break;
+	}
+
+	return ret;
 }
 
 static void *_monitor_thread(void *arg)
 {
-	int fd = open_udp_listenfd(19002);
+	int fd = open_udp_listenfd(VIRTUAL_SWITCH_BOX_LISTEN_PORT);
 	fd_set rset;
 	int ret;
 	struct timeval tv;
@@ -514,8 +512,10 @@ static void *_monitor_thread(void *arg)
 		uint16_t cmd = GET_CMD_FIELD(rbuf, 0, uint16_t);
 		uint16_t len = GET_CMD_FIELD(rbuf, 2, uint16_t);
 
-		if (len != ret)
+		if (len != ret) {
+			hsb_debug("error cmd: %d, %d\n", len, ret);
 			continue;
+		}
 
 		//hsb_debug("get a cmd: %x\n", cmd);
 
@@ -532,14 +532,18 @@ static void *_monitor_thread(void *arg)
 			}
 			case VS_CMD_STATUS_CHANGED:
 			{
-				HSB_STATUS_T status;
-				uint8_t id = GET_CMD_FIELD(rbuf, 4, uint8_t);
+				uint16_t id = GET_CMD_FIELD(rbuf, 4, uint16_t);
 				uint16_t val = GET_CMD_FIELD(rbuf, 6, uint16_t);
-				
-				_vs_status_to_dev_status(id, val, &status.id, &status.val);
 
-				hsb_debug("status %d=%d\n", id, val);
-				_update_status(pdev, &status);
+				_status_updated(pdev->id, id, val);
+				break;
+			}
+			case VS_CMD_EVENT:
+			{
+				uint16_t id = GET_CMD_FIELD(rbuf, 4, uint16_t);
+				uint16_t param = GET_CMD_FIELD(rbuf, 6, uint16_t);
+
+				_event(pdev->id, id, param);
 				break;
 			}
 			default:

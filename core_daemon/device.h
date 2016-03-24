@@ -108,7 +108,7 @@ typedef struct _HSB_DEV_T {
 	uint32_t		interface;
 	uint8_t			mac[6];
 
-	HSB_WORK_MODE_T		work_mode;
+	uint32_t		work_mode;
 
 	HSB_TIMER_T		timer[HSB_DEV_MAX_TIMER_NUM];
 	HSB_TIMER_STATUS_T	timer_status[HSB_DEV_MAX_TIMER_NUM];
@@ -161,6 +161,9 @@ int dev_updated(uint32_t devid, HSB_DEV_UPDATED_TYPE_T type);
 int dev_sensor_triggered(uint32_t devid, HSB_SENSOR_TYPE_T type);
 int dev_sensor_recovered(uint32_t devid, HSB_SENSOR_TYPE_T type);
 int dev_mode_changed(HSB_WORK_MODE_T mode);
+
+int set_box_work_mode(HSB_WORK_MODE_T mode);
+HSB_WORK_MODE_T get_box_work_mode(void);
 
 int register_dev_drv(HSB_DEV_DRV_T *drv);
 

@@ -11,65 +11,117 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include "network_utils.h"
-#include "driver_virtual_switch.h"
+#include "../core_daemon/driver_virtual_switch.h"
 
-static uint32_t status = 0;
+static uint16_t status_on_off = 0;
 struct sockaddr_in mcastaddr;
+
+uint8_t mac[6] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
 
 static int deal_udp_pkt(int fd, uint8_t *buf, size_t count, struct sockaddr *cliaddr, socklen_t clilen)
 {
 	uint16_t cmd = GET_CMD_FIELD(buf, 0, uint16_t);
 	uint16_t len = GET_CMD_FIELD(buf, 2, uint16_t);
 
-	if (len != 16 || len != count) {
+	if (len != count) {
 		printf("recv pkt size err, count=%d len=%d\n", count, len);
 		return -1;
 	}
 
-	uint8_t rbuf[16];
+	uint8_t rbuf[64];
+	int rlen = 0;
+	bool status_updated = false;
+
 	memset(rbuf, 0, sizeof(rbuf));
 
-
 	switch (cmd) {
-		case UDP_CMD_DEVICE_DISCOVER:
+		case VS_CMD_DEVICE_DISCOVER:
 		{
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_DEVICE_DISCOVER_RESP);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
+			rlen = 8;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_DEVICE_DISCOVER_RESP);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+			SET_CMD_FIELD(rbuf, 4, uint8_t, 0);
+			SET_CMD_FIELD(rbuf, 5, uint8_t, 1);
 
 			printf("recv cmd: device discover\n");
 			break;
 		}
-		case UDP_CMD_GET_STATUS:
+		case VS_CMD_GET_INFO:
 		{
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_GET_STATUS_RESP);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
-			SET_CMD_FIELD(rbuf, 4, uint32_t, status);
+			rlen = 28;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_GET_INFO_RESP);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+			SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
+			SET_CMD_FIELD(rbuf, 6, uint16_t, 0);
+
+			memcpy(rbuf + 8, mac, 6);
+
+			printf("recv cmd: get info\n");
+			break;
+		}
+		case VS_CMD_GET_STATUS:
+		{
+			rlen = 8;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_GET_STATUS_RESP);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+			SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
+			SET_CMD_FIELD(rbuf, 6, uint16_t, status_on_off);
 
 			printf("recv cmd: get status\n");
 			break;
 		}
-		case UDP_CMD_SET_STATUS:
+		case VS_CMD_SET_STATUS:
 		{
-			status = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t status_id = GET_CMD_FIELD(buf, 4, uint16_t);
+			uint16_t status = GET_CMD_FIELD(buf, 6, uint16_t);
+			if (0 != status_id) {
+				printf("not supported status %d\n", status_id);
+				break;
+			}
 
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_SET_STATUS_RESP);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
+			if (status != status_on_off) {
+				status_updated = true;
+				status_on_off = status;
+			}
+	
+			rlen = 8;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_RESULT);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
 			SET_CMD_FIELD(rbuf, 4, uint16_t, 1);
 
 			printf("recv cmd: set status[%d]\n", status);
 			break;
 		}
-		case UDP_CMD_KEEP_ALIVE:
+		case VS_CMD_DO_ACTION:
 		{
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_KEEP_ALIVE);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
+			uint16_t act_id = GET_CMD_FIELD(buf, 4, uint16_t);
+			uint16_t act_val = GET_CMD_FIELD(buf, 6, uint16_t);
+
+			if (act_id == 0) {
+				printf("alarming...\n");
+			} else if (act_id == 1) {
+				printf("IR key: %d\n", act_val);
+			}
+
+			rlen = 8;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_RESULT);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+			SET_CMD_FIELD(rbuf, 4, uint16_t, 1);
+			break;
+		}
+		case VS_CMD_KEEP_ALIVE:
+		{
+			rlen = 4;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_KEEP_ALIVE);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
 
 			break;
 		}
 		default:
 		{
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_RESULT);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
+			rlen = 8;
+			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_RESULT);
+			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
 			SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
 
 			printf("recv cmd: unknown %x\n, cmd");
@@ -77,18 +129,67 @@ static int deal_udp_pkt(int fd, uint8_t *buf, size_t count, struct sockaddr *cli
 		}
 	}
 
-	sendto(fd, rbuf, 16, 0, cliaddr, clilen);
+	sendto(fd, rbuf, rlen, 0, cliaddr, clilen);
 
-	if (cmd != UDP_CMD_SET_STATUS)
+	if (!status_updated)
 		return 0;
 
 	memset(rbuf, 0, sizeof(rbuf));
-	SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_UPDATE_STATUS);
-	SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
-	SET_CMD_FIELD(rbuf, 4, uint32_t, status);
+	SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_STATUS_CHANGED);
+	SET_CMD_FIELD(rbuf, 2, uint16_t, 8);
+	SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
+	SET_CMD_FIELD(rbuf, 6, uint16_t, status_on_off);
+
 	
-	sendto(fd, rbuf, 16, 0, &mcastaddr, sizeof(mcastaddr));
-	printf("send update status=%d\n", status);
+	sendto(fd, rbuf, 16, 0, (struct sockaddr *)&mcastaddr, sizeof(mcastaddr));
+	printf("send status changed=%d\n", status_on_off);
+
+	return 0;
+}
+
+static int deal_input_cmd(int sockfd, uint8_t *buf, struct sockaddr_in *addr)
+{
+	uint32_t val = 0;
+	uint8_t rbuf[16];
+	int rlen = 0;
+	memset(rbuf, 0, sizeof(rbuf));
+
+	if (1 == sscanf(buf, "status=%d", &val)) {
+		if (status_on_off == val)
+			return 0;
+
+		status_on_off = val;
+
+		rlen = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_STATUS_CHANGED);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+		SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
+		SET_CMD_FIELD(rbuf, 6, uint16_t, val);
+
+	} else if (1 == sscanf(buf, "sensor=%d", &val)) {
+		rlen = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_EVENT);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+		if (val == 0)
+			SET_CMD_FIELD(rbuf, 4, uint16_t, 1);
+		else
+			SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
+	
+		SET_CMD_FIELD(rbuf, 6, uint16_t, 0);
+
+	} else if (1 == sscanf(buf, "key=%d", &val)) {
+
+		rlen = 8;
+		SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_EVENT);
+		SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
+		SET_CMD_FIELD(rbuf, 4, uint16_t, 2);
+		SET_CMD_FIELD(rbuf, 6, uint16_t, val);
+	} else {
+		return -1;
+	}
+
+	printf("sendto %s\n", inet_ntoa(addr->sin_addr));
+	sendto(sockfd, rbuf, rlen, 0, (struct sockaddr *)addr, sizeof(struct sockaddr_in));
 
 	return 0;
 }
@@ -145,27 +246,10 @@ int main(int argc, char *argv[])
 			nread = read(inputfd, buf, sizeof(buf));
 			buf[nread] = 0;
 
-			uint32_t val = 0;
-			ret = sscanf(buf, "status=%d", &val);
-			if (ret < 1 || status == val)
-				continue;
-
-			uint8_t rbuf[16];
-			memset(rbuf, 0, sizeof(rbuf));
-
-			status = val;
-
-			SET_CMD_FIELD(rbuf, 0, uint16_t, UDP_CMD_UPDATE_STATUS);
-			SET_CMD_FIELD(rbuf, 2, uint16_t, 16);
-			SET_CMD_FIELD(rbuf, 4, uint32_t, status);
-
-			printf("sendto %s\n", inet_ntoa(mcastaddr.sin_addr));
-			sendto(sockfd, rbuf, 16, 0, (struct sockaddr *)&mcastaddr, mcastlen);
+			deal_input_cmd(sockfd, buf, &mcastaddr);
 		}
-
 	}
 
 	return 0;
 }
-
 
