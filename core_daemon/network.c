@@ -78,7 +78,7 @@ static int _reply_get_device_info(uint8_t *buf, HSB_DEV_T *dev)
 	SET_CMD_FIELD(buf, 14, uint16_t, dev->interface); /* device interface */
 	memcpy(buf + 16, dev->mac, 6); /* mac address */
 
-	return 0;
+	return len;
 }
 
 static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T *status, int num)
@@ -89,7 +89,7 @@ static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T 
 	MAKE_CMD_HDR(buf, HSB_CMD_GET_STATUS_RESP, len);
 	SET_CMD_FIELD(buf, 4, uint32_t, dev_id);
 
-	for (id = 0; id < num; num++) {
+	for (id = 0; id < num; id++) {
 		SET_CMD_FIELD(buf, 8 + id * 4, uint16_t, status[id].id);
 		SET_CMD_FIELD(buf, 10 + id * 4, uint16_t, status[id].val);
 	}
@@ -166,6 +166,7 @@ static int _get_dev_status(uint8_t *buf, int len, HSB_STATUS_T *status, int *num
 	for (id = 0; id < total; id++) {
 		status[id].id = GET_CMD_FIELD(buf, 8 + id * 4, uint16_t);
 		status[id].val = GET_CMD_FIELD(buf, 10 + id * 4, uint16_t);
+		hsb_debug("_get_dev_status: %d=%d\n", status[id].id, status[id].val);
 	}
 
 	*num = total;
@@ -230,7 +231,7 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 		case HSB_CMD_GET_STATUS:
 		{
 			HSB_STATUS_T status[16];
-			int status_num;
+			int status_num = 16;
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
 
 			ret = get_dev_status(dev_id, status, &status_num);
@@ -286,6 +287,9 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			tm.act_param = GET_CMD_FIELD(buf, 18, uint16_t);
 
 			ret = set_dev_timer(dev_id, &tm);
+			if (ret)
+				hsb_debug("set_dev_timer ret=%d\n", ret);
+
 			rlen = _reply_result(reply_buf, ret);
 			break;
 		}
@@ -413,7 +417,7 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			break;
 	}
 
-	if (rlen < 0) {
+	if (rlen <= 0) {
 		hsb_debug("rlen%d<0\n", rlen);
 		return -2;
 	}

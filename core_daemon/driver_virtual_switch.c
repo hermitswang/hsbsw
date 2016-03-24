@@ -50,7 +50,7 @@ static int virtual_switch_probe(void)
 	int ret;
 	size_t count = 0;
 
-	hsb_debug("probe virtual switch\n");
+	//hsb_debug("probe virtual switch\n");
 
 	/* 1.create udp socket */
 	int sockfd = open_udp_clientfd();
@@ -99,7 +99,7 @@ static int virtual_switch_probe(void)
 	} while (tv.tv_sec > 0 && tv.tv_usec > 0);
 
 	close(sockfd);
-	hsb_debug("probe virtual switch done\n");
+	//hsb_debug("probe virtual switch done\n");
 
 	return 0;
 }
@@ -171,7 +171,7 @@ static int virtual_switch_set_status(struct _HSB_DEV_T *pdev, const HSB_STATUS_T
 		return -3;
 	}
 
-	hsb_debug("send set status to device done\n");
+	//hsb_debug("send set status to device done\n");
 
 	return 0;
 }
@@ -182,9 +182,9 @@ static int virtual_switch_get_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *stat
 	int ret, len;
 
 	memset(wbuf, 0, sizeof(wbuf));
-	len = 12;
+	len = 8;
 	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_GET_STATUS);
-	SET_CMD_FIELD(wbuf, 2, uint16_t, 12);
+	SET_CMD_FIELD(wbuf, 2, uint16_t, len);
 	SET_CMD_FIELD(wbuf, 4, uint32_t, 0xffffffff);
 
 	ret = _transfer(pdev, wbuf, len, rbuf, sizeof(rbuf));
@@ -220,7 +220,7 @@ static int virtual_switch_get_status(struct _HSB_DEV_T *pdev, HSB_STATUS_T *stat
 
 	*num = status_num;
 
-	hsb_debug("send get status to device done\n");
+	//hsb_debug("send get status to device done, num=%d\n", *num);
 
 	return HSB_E_OK;
 }
@@ -230,7 +230,7 @@ static int virtual_switch_set_action(struct _HSB_DEV_T *pdev, const HSB_ACTION_T
 	int ret, len;
 	uint8_t wbuf[64];
 	uint8_t rbuf[64];
-
+	
 	len = 8;
 	memset(wbuf, 0, sizeof(wbuf));
 	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_DO_ACTION);
@@ -259,7 +259,7 @@ static int virtual_switch_set_action(struct _HSB_DEV_T *pdev, const HSB_ACTION_T
 		return -3;
 	}
 
-	hsb_debug("send set action to device done\n");
+	//hsb_debug("send set action to device done\n");
 
 	return HSB_E_OK;
 }
@@ -362,7 +362,7 @@ static int _get_device_info(struct in_addr *addr, VS_INFO *info)
 
 	close(sockfd);
 
-	hsb_debug("get info done\n");
+	//hsb_debug("get info done\n");
 
 	return HSB_E_OK;
 }

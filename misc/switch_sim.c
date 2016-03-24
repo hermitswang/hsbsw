@@ -135,13 +135,14 @@ static int deal_udp_pkt(int fd, uint8_t *buf, size_t count, struct sockaddr *cli
 		return 0;
 
 	memset(rbuf, 0, sizeof(rbuf));
+	rlen = 8;
 	SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_STATUS_CHANGED);
 	SET_CMD_FIELD(rbuf, 2, uint16_t, 8);
 	SET_CMD_FIELD(rbuf, 4, uint16_t, 0);
 	SET_CMD_FIELD(rbuf, 6, uint16_t, status_on_off);
 
 	
-	sendto(fd, rbuf, 16, 0, (struct sockaddr *)&mcastaddr, sizeof(mcastaddr));
+	sendto(fd, rbuf, rlen, 0, (struct sockaddr *)&mcastaddr, sizeof(mcastaddr));
 	printf("send status changed=%d\n", status_on_off);
 
 	return 0;
