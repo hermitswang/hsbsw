@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include "net_protocol.h"
 #include "hsb_device.h"
+#include "hsb_error.h"
 
 typedef struct {
 	uint32_t	devid;
@@ -22,23 +23,66 @@ typedef struct {
 } HSB_EVT_T;
 
 typedef struct {
-	uint16_t	id;
-	uint16_t	val;
+	uint32_t	devid;
+	uint32_t	num;
+	uint16_t	id[8];
+	uint16_t	val[8];
 } HSB_STATUS_T;
+
+typedef struct {
+	uint32_t	drvid;
+} HSB_PROBE_T;
+
+typedef struct {
+	HSB_ERROR_NO_T		ret_val;
+} HSB_RESULT_T;
+
+typedef enum {
+	HSB_ACT_TYPE_PROBE = 0,
+	HSB_ACT_TYPE_SET_STATUS,
+	HSB_ACT_TYPE_GET_STATUS,
+	HSB_ACT_TYPE_DO_ACTION,
+} HSB_ACT_TYPE_T;
+
+typedef struct {
+	HSB_ACT_TYPE_T		type;
+	void			*reply;
+	union {
+		HSB_PROBE_T	probe;
+		HSB_STATUS_T	status;
+		HSB_ACTION_T	action;
+	} u;
+} HSB_ACT_T;
+
+typedef enum {
+	HSB_RESP_TYPE_RESULT = 0,
+	HSB_RESP_TYPE_EVENT,
+	HSB_RESP_TYPE_STATUS,
+} HSB_RESP_TYPE_T;
+
+typedef struct {
+	HSB_RESP_TYPE_T		type;
+	void			*reply;
+	union {
+		HSB_EVT_T	event;
+		HSB_STATUS_T	status;
+		HSB_RESULT_T	result;
+	} u;
+} HSB_RESP_T;
 
 struct _HSB_DEV_T;
 struct _HSB_DEV_DRV_T;
 
 typedef struct {
 	int (*probe)(void);
-	int (*get_status)(struct _HSB_DEV_T *pdev, HSB_STATUS_T *status, int *num);
-	int (*set_status)(struct _HSB_DEV_T *pdev, const HSB_STATUS_T *status, int num);
-	int (*set_action)(struct _HSB_DEV_T *pdev, const HSB_ACTION_T *act);
+	int (*get_status)(HSB_STATUS_T *status);
+	int (*set_status)(const HSB_STATUS_T *status);
+	int (*set_action)(const HSB_ACTION_T *act);
 } HSB_DEV_OP_T;
 
 typedef struct _HSB_DEV_DRV_T {
 	char			*name;
-	uint32_t		drv_id;
+	uint32_t		id;
 
 	HSB_DEV_OP_T		*op;
 } HSB_DEV_DRV_T;
@@ -98,15 +142,18 @@ typedef struct {
 #define HSB_DEV_MAX_DELAY_NUM		(8)
 #define HSB_DEV_MAX_LINKAGE_NUM		(8)
 
+typedef struct {
+	HSB_DEV_CLASS_T		cls;
+	uint32_t		interface;
+	uint8_t			mac[6];
+} HSB_DEV_INFO_T;
 
 typedef struct _HSB_DEV_T {
 	uint32_t		id;
 
 	uint32_t		status;
 
-	HSB_DEV_CLASS_T		dev_class;
-	uint32_t		interface;
-	uint8_t			mac[6];
+	HSB_DEV_INFO_T		info;
 
 	uint32_t		work_mode;
 
@@ -133,10 +180,11 @@ typedef struct _HSB_DEV_T {
 int init_dev_module(void);
 int get_dev_id_list(uint32_t *dev_id, int *dev_num);
 int get_dev_info(uint32_t dev_id, HSB_DEV_T *dev);
-int get_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int *num);
-int set_dev_status(uint32_t dev_id, const HSB_STATUS_T *status, int num);
-int probe_dev(uint32_t drv_id);
 
+int get_dev_status_async(uint32_t devid, void *reply);
+int set_dev_status_async(const HSB_STATUS_T *status, void *reply);
+int probe_dev_async(const HSB_PROBE_T *probe, void *reply);
+int set_dev_action_async(const HSB_ACTION_T *act, void *reply);
 
 int get_dev_timer(uint32_t dev_id, uint16_t timer_id, HSB_TIMER_T *timer);
 int set_dev_timer(uint32_t dev_id, const HSB_TIMER_T *timer);
@@ -148,13 +196,12 @@ int get_dev_linkage(uint32_t dev_id, uint16_t link_id, HSB_LINKAGE_T *link);
 int set_dev_linkage(uint32_t dev_id, const HSB_LINKAGE_T *link);
 int del_dev_linkage(uint32_t dev_id, uint16_t link_id);
 
-int set_dev_action(const HSB_ACTION_T *act);
-
 HSB_DEV_T *create_dev(void);
-HSB_DEV_T *find_dev_by_ip(struct in_addr *ip);
 int destroy_dev(HSB_DEV_T *dev);
 int register_dev(HSB_DEV_T *dev);
 int remove_dev(HSB_DEV_T *dev);
+int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid);
+int dev_offline(uint32_t devid);
 
 int dev_status_updated(uint32_t devid, HSB_STATUS_T *status);
 int dev_updated(uint32_t devid, HSB_DEV_UPDATED_TYPE_T type);

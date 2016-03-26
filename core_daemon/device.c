@@ -1,38 +1,43 @@
 
 #include <glib.h>
 #include <string.h>
+#include <pthread.h>
+#include <errno.h>
 #include "device.h"
 #include "debug.h"
 #include "hsb_error.h"
 #include "hsb_config.h"
+#include "thread_utils.h"
 
 typedef struct {
-	GQueue		queue;
-	GMutex		mutex;
+	GQueue			queue;
+	GMutex			mutex;
 
-	GQueue		offq;
+	GQueue			offq;
 
-	GQueue		driverq;
-	uint32_t	dev_id;
+	GQueue			driverq;
+	uint32_t		dev_id;
 
-	HSB_WORK_MODE_T	work_mode;
-	uint32_t	sec_today;
+	HSB_WORK_MODE_T		work_mode;
+	uint32_t		sec_today;
+
+	thread_data_control	async_thread_ctl;
 } HSB_DEVICE_CB_T;
 
-static HSB_DEVICE_CB_T gl_device_cb = { 0 };
+static HSB_DEVICE_CB_T gl_dev_cb = { 0 };
 
 #define HSB_DEVICE_CB_LOCK()	do { \
-	g_mutex_lock(&gl_device_cb.mutex); \
+	g_mutex_lock(&gl_dev_cb.mutex); \
 } while (0)
 
 #define HSB_DEVICE_CB_UNLOCK()	do { \
-	g_mutex_unlock(&gl_device_cb.mutex); \
+	g_mutex_unlock(&gl_dev_cb.mutex); \
 } while (0)
 
 int get_dev_id_list(uint32_t *dev_id, int *dev_num)
 {
 	guint len, id;
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 	HSB_DEV_T	*pdev;
 	int num = 0;
 
@@ -61,7 +66,7 @@ int get_dev_id_list(uint32_t *dev_id, int *dev_num)
 static HSB_DEV_T *_find_dev(uint32_t dev_id)
 {
 	guint len, id;
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 	HSB_DEV_T	*pdev = NULL;
 
 	len = g_queue_get_length(queue);
@@ -76,6 +81,28 @@ static HSB_DEV_T *_find_dev(uint32_t dev_id)
 			return pdev;
 	}
 
+	return NULL;
+}
+
+static HSB_DEV_DRV_T *_get_dev_drv(uint32_t devid)
+{
+	HSB_DEV_DRV_T *pdrv = NULL;
+	HSB_DEV_T *pdev = NULL;
+
+	HSB_DEVICE_CB_LOCK();
+
+	pdev = _find_dev(devid);
+
+	if (!pdev || !pdev->driver) {
+		goto fail;
+	}
+
+	pdrv = pdev->driver;
+
+	HSB_DEVICE_CB_UNLOCK();
+
+	return pdrv;
+fail:
 	return NULL;
 }
 
@@ -98,114 +125,45 @@ int get_dev_info(uint32_t dev_id, HSB_DEV_T *dev)
 	return ret;
 }
 
-int get_dev_status(uint32_t dev_id, HSB_STATUS_T *status, int *num)
+int get_dev_status(HSB_STATUS_T *status)
 {
-	int ret;
+	int ret = HSB_E_NOT_SUPPORTED;
 
-	HSB_DEV_T *pdev = NULL;
-
-	HSB_DEVICE_CB_LOCK();
-
-	pdev = _find_dev(dev_id);
-
-	if (!pdev || !pdev->driver) {
-		ret = -1;
-		goto fail;
-	}
-
-	if (pdev->driver->op->get_status)
-		ret = pdev->driver->op->get_status(pdev, status, num);
-
-	HSB_DEVICE_CB_UNLOCK();
-
-	return ret;
-
-fail:
-	HSB_DEVICE_CB_UNLOCK();
-	return ret;
-}
-
-
-int _set_dev_status(HSB_DEV_T *pdev, const HSB_STATUS_T *status, int num)
-{
-	int ret = HSB_E_OK;
-
-	if (pdev->driver->op->set_status)
-		ret = pdev->driver->op->set_status(pdev, status, num);
+	HSB_DEV_DRV_T *pdrv = _get_dev_drv(status->devid);
+	if (pdrv && pdrv->op->get_status)
+		ret = pdrv->op->get_status(status);
 
 	return ret;
 }
 
-
-int set_dev_status(uint32_t dev_id, const HSB_STATUS_T *status, int num)
+int set_dev_status(const HSB_STATUS_T *status)
 {
-	int ret;
+	int ret = HSB_E_NOT_SUPPORTED;
 
-	HSB_DEV_T *pdev = NULL;
+	if (0 == status->devid && status->id[0] == HSB_STATUS_TYPE_WORK_MODE)
+		return set_box_work_mode(status->val[0]);
 
-	if (0 == dev_id && status->id == HSB_STATUS_TYPE_WORK_MODE)
-		return set_box_work_mode(status->val);
-
-	HSB_DEVICE_CB_LOCK();
-
-	pdev = _find_dev(dev_id);
-
-	if (!pdev || !pdev->driver) {
-		ret = -1;
-		goto fail;
-	}
-
-	ret = _set_dev_status(pdev, status, num);
-
-	HSB_DEVICE_CB_UNLOCK();
-
-	return ret;
-
-fail:
-	HSB_DEVICE_CB_UNLOCK();
-	return ret;
-}
-
-static int _set_dev_action(HSB_DEV_T *pdev, const HSB_ACTION_T *act)
-{
-	int ret = HSB_E_OK;
-
-	if (pdev->driver->op->set_action)
-		ret = pdev->driver->op->set_action(pdev, act);
+	HSB_DEV_DRV_T *pdrv = _get_dev_drv(status->devid);
+	if (pdrv && pdrv->op->set_status)
+		ret = pdrv->op->set_status(status);
 
 	return ret;
 }
 
 int set_dev_action(const HSB_ACTION_T *act)
 {
-	int ret;
+	int ret = HSB_E_NOT_SUPPORTED;
 
-	HSB_DEV_T *pdev = NULL;
+	HSB_DEV_DRV_T *pdrv = _get_dev_drv(act->devid);
+	if (pdrv && pdrv->op->set_action)
+		ret = pdrv->op->set_action(act);
 
-	HSB_DEVICE_CB_LOCK();
-
-	pdev = _find_dev(act->devid);
-
-	if (!pdev || !pdev->driver) {
-		ret = -1;
-		goto fail;
-	}
-
-	ret = _set_dev_action(pdev, act);
-
-	HSB_DEVICE_CB_UNLOCK();
-
-	return ret;
-
-fail:
-	HSB_DEVICE_CB_UNLOCK();
 	return ret;
 }
 
-
 static HSB_DEV_DRV_T *_find_drv(uint32_t drv_id)
 {
-	GQueue *queue = &gl_device_cb.driverq;
+	GQueue *queue = &gl_dev_cb.driverq;
 	HSB_DEV_DRV_T *pdrv = NULL;
 	int len, id;
 
@@ -217,7 +175,7 @@ static HSB_DEV_DRV_T *_find_drv(uint32_t drv_id)
 			continue;
 		}
 
-		if (pdrv->drv_id == drv_id)
+		if (pdrv->id == drv_id)
 			return pdrv;
 	}
 
@@ -241,7 +199,7 @@ static uint32_t alloc_dev_id(void)
 
 	HSB_DEVICE_CB_LOCK();
 
-	dev_id = gl_device_cb.dev_id++;
+	dev_id = gl_dev_cb.dev_id++;
 
 	HSB_DEVICE_CB_UNLOCK();
 	
@@ -255,7 +213,7 @@ int register_dev_drv(HSB_DEV_DRV_T *drv)
 		return HSB_E_BAD_PARAM;
 
 	int len, id;
-	GQueue *queue = &gl_device_cb.driverq;
+	GQueue *queue = &gl_dev_cb.driverq;
 	HSB_DEV_DRV_T *pdrv = NULL;
 
 	len = g_queue_get_length(queue);
@@ -266,8 +224,8 @@ int register_dev_drv(HSB_DEV_DRV_T *drv)
 			continue;
 		}
 
-		if (pdrv->drv_id == drv->drv_id) {
-			hsb_critical("%s driver load fail, drv_id alreasy exists.\n", drv->drv_id);
+		if (pdrv->id == drv->id) {
+			hsb_critical("%s driver load fail, drv_id alreasy exists.\n", drv->id);
 			return HSB_E_ENTRY_EXISTS;
 		}
 	}
@@ -282,7 +240,7 @@ int register_dev_drv(HSB_DEV_DRV_T *drv)
 HSB_DEV_T *find_dev_by_ip(struct in_addr *ip)
 {
 	guint len, id;
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 	HSB_DEV_T	*pdev = NULL;
 
 	len = g_queue_get_length(queue);
@@ -323,7 +281,7 @@ int destroy_dev(HSB_DEV_T *dev)
 int register_dev(HSB_DEV_T *dev)
 {
 	guint len, id;
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 
 	HSB_DEVICE_CB_LOCK();
 
@@ -338,7 +296,7 @@ int register_dev(HSB_DEV_T *dev)
 
 int remove_dev(HSB_DEV_T *dev)
 {
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 
 	HSB_DEVICE_CB_LOCK();
 	g_queue_remove(queue, dev);
@@ -349,22 +307,167 @@ int remove_dev(HSB_DEV_T *dev)
 	return 0;
 }
 
+int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid)
+{
+	int ret = HSB_E_OK;
+	GQueue *offq = &gl_dev_cb.offq;
+	GQueue *queue = &gl_dev_cb.queue;
+	HSB_DEV_T *pdev = NULL;
+	guint len, id;
+
+	HSB_DEVICE_CB_LOCK();
+
+	len = g_queue_get_length(offq);
+	for (id = 0; id < len; id++) {
+		pdev = (HSB_DEV_T *)g_queue_peek_nth(offq, id);
+		if (!pdev) {
+			hsb_critical("device null\n");
+			continue;
+		}
+
+		if (pdev->driver->id == drvid &&
+		    0 == memcmp(pdev->info.mac, info->mac, 6)) {
+			break;
+		}
+	}
+
+	HSB_DEVICE_CB_UNLOCK();
+
+	if (id == len) { /* not found in offq */
+		pdev = create_dev();
+		pdev->driver = _find_drv(drvid);
+
+		memcpy(&pdev->info, info, sizeof(*info));
+
+		HSB_DEVICE_CB_LOCK();
+		g_queue_push_tail(queue, pdev);
+		HSB_DEVICE_CB_UNLOCK();
+
+		dev_updated(pdev->id, HSB_DEV_UPDATED_TYPE_NEW_ADD);
+	} else {
+		g_queue_pop_nth(offq, id);
+
+		HSB_DEVICE_CB_LOCK();
+		g_queue_push_tail(queue, pdev);
+		HSB_DEVICE_CB_UNLOCK();
+
+		dev_updated(pdev->id, HSB_DEV_UPDATED_TYPE_ONLINE);
+	}
+
+	*devid = pdev->id;
+
+	return ret;
+}
+
+int dev_offline(uint32_t devid)
+{
+	int ret = HSB_E_OK;
+	GQueue *offq = &gl_dev_cb.offq;
+	GQueue *queue = &gl_dev_cb.queue;
+	HSB_DEV_T *pdev = NULL;
+	guint len, id;
+
+	HSB_DEVICE_CB_LOCK();
+
+	len = g_queue_get_length(queue);
+	for (id = 0; id < len; id++) {
+		pdev = (HSB_DEV_T *)g_queue_peek_nth(queue, id);
+		if (!pdev) {
+			hsb_critical("device null\n");
+			continue;
+		}
+
+		if (pdev->id == devid)
+			break;
+	}
+
+	if (id == len) {
+		hsb_critical("dev %d not found in queue\n", devid);
+		HSB_DEVICE_CB_UNLOCK();
+		return HSB_E_OTHERS;
+	}
+
+	g_queue_pop_nth(queue, id);
+
+	g_queue_push_tail(offq, pdev);
+
+	HSB_DEVICE_CB_UNLOCK();
+
+	dev_updated(devid, HSB_DEV_UPDATED_TYPE_OFFLINE);
+
+	return ret;
+}
+
+static int check_linkage(uint32_t devid, HSB_EVT_T *evt)
+{
+	HSB_DEV_T *pdev = _find_dev(devid);
+	if (!pdev)
+		return HSB_E_OTHERS;
+
+	HSB_WORK_MODE_T work_mode = gl_dev_cb.work_mode;
+	HSB_LINKAGE_T *link = pdev->link;
+	HSB_LINKAGE_STATUS_T *status = pdev->link_status;
+
+	if (!CHECK_BIT(pdev->work_mode, work_mode))
+		return HSB_E_OTHERS;
+
+	int id;
+	uint8_t flag;
+
+	for (id = 0; id < HSB_DEV_MAX_LINKAGE_NUM; id++, link++, status++) {
+		if (!status->active)
+			continue;
+
+		if (!CHECK_BIT(link->work_mode, work_mode))
+			continue;
+
+		if (evt->id != link->evt_id ||
+		    evt->param1 != link->evt_param1 ||
+		    evt->param2 != link->evt_param2)
+			continue;
+
+		flag = link->flag;
+		if (CHECK_BIT(flag, 0)) {
+			HSB_ACTION_T action;
+			action.devid = link->act_devid;
+			action.id = link->act_id;
+			action.param = link->act_param;
+			set_dev_action_async(&action, NULL);
+		} else  {
+			HSB_STATUS_T stat;
+			stat.devid = link->act_devid;
+			stat.num = 1;
+			stat.id[0] = link->act_id;
+			stat.val[0] = link->act_param;
+			set_dev_status_async(&stat, NULL);
+		}
+	}
+
+	return HSB_E_OK;
+}
+
+
 static _dev_event(uint32_t devid, HSB_EVT_TYPE_T type, uint8_t param1, uint16_t param2)
 {
-	HSB_EVT_T evt;
-	evt.devid = devid;
-	evt.id = type;
-	evt.param1 = param1;
-	evt.param2 = param2;
+	HSB_RESP_T resp = { 0 };
+
+	resp.type = HSB_RESP_TYPE_EVENT;
+	resp.reply = NULL;
+	resp.u.event.devid = devid;
+	resp.u.event.id = type;
+	resp.u.event.param1 = param1;
+	resp.u.event.param2 = param2;
+
+	check_linkage(devid, &resp.u.event);
 
 	hsb_debug("get event: %d, %d, %d, %d\n", devid, type, param1, param2);
 
-	return notify_dev_event(&evt);
+	return notify_resp(&resp);
 }
 
 int dev_status_updated(uint32_t devid, HSB_STATUS_T *status)
 {
-	return _dev_event(devid, HSB_EVT_TYPE_STATUS_UPDATED, status->id, status->val);
+	return _dev_event(devid, HSB_EVT_TYPE_STATUS_UPDATED, status->id[0], status->val[0]);
 }
 
 int dev_updated(uint32_t devid, HSB_DEV_UPDATED_TYPE_T type)
@@ -393,7 +496,7 @@ int set_box_work_mode(HSB_WORK_MODE_T mode)
 	if (!HSB_WORK_MODE_VALID(mode))
 		return HSB_E_BAD_PARAM;
 
-	gl_device_cb.work_mode = mode;
+	gl_dev_cb.work_mode = mode;
 
 	dev_mode_changed(mode);
 
@@ -402,12 +505,12 @@ int set_box_work_mode(HSB_WORK_MODE_T mode)
 
 HSB_WORK_MODE_T get_box_work_mode(void)
 {
-	return gl_device_cb.work_mode;
+	return gl_dev_cb.work_mode;
 }
 
 static void probe_all_devices(void)
 {
-	GQueue *queue = &gl_device_cb.driverq;
+	GQueue *queue = &gl_dev_cb.driverq;
 	HSB_DEV_DRV_T *drv;
 	int id, len = g_queue_get_length(queue);
 
@@ -417,14 +520,211 @@ static void probe_all_devices(void)
 	}
 }
 
+int probe_dev_async(const HSB_PROBE_T *probe, void *reply)
+{
+	HSB_ACT_T *act = g_slice_new0(HSB_ACT_T);
+	if (!act)
+		return HSB_E_NO_MEMORY;
+
+	act->type = HSB_ACT_TYPE_PROBE;
+	act->reply = reply;
+	act->u.probe.drvid = probe->drvid;
+
+	thread_control_push_data(&gl_dev_cb.async_thread_ctl, act);
+
+	return HSB_E_OK;
+}
+
+int set_dev_status_async(const HSB_STATUS_T *status, void *reply)
+{
+	HSB_ACT_T *act = g_slice_new0(HSB_ACT_T);
+	if (!act)
+		return HSB_E_NO_MEMORY;
+
+	act->type = HSB_ACT_TYPE_SET_STATUS;
+	act->reply = reply;
+	memcpy(&act->u.status, status, sizeof(*status));
+
+	thread_control_push_data(&gl_dev_cb.async_thread_ctl, act);
+
+	return HSB_E_OK;
+}
+
+int get_dev_status_async(uint32_t devid, void *reply)
+{
+	HSB_ACT_T *act = g_slice_new0(HSB_ACT_T);
+	if (!act)
+		return HSB_E_NO_MEMORY;
+
+	act->type = HSB_ACT_TYPE_GET_STATUS;
+	act->reply = reply;
+	act->u.status.devid = devid;
+
+	thread_control_push_data(&gl_dev_cb.async_thread_ctl, act);
+
+	return HSB_E_OK;
+}
+
+int set_dev_action_async(const HSB_ACTION_T *action, void *reply)
+{
+	HSB_ACT_T *act = g_slice_new0(HSB_ACT_T);
+	if (!act)
+		return HSB_E_NO_MEMORY;
+
+	act->type = HSB_ACT_TYPE_DO_ACTION;
+	act->reply = reply;
+	memcpy(&act->u.action, action, sizeof(*action));
+
+	thread_control_push_data(&gl_dev_cb.async_thread_ctl, act);
+
+	return HSB_E_OK;
+}
+
+void _process_dev_act(HSB_ACT_T *act)
+{
+	int ret;
+	HSB_ACT_TYPE_T type = act->type;
+	HSB_RESP_T resp = { 0 };
+	void *reply = act->reply;
+	resp.reply = reply;
+
+	switch (type) {
+		case HSB_ACT_TYPE_PROBE:
+		{
+			ret = probe_dev(act->u.probe.drvid);
+			if (!reply)
+				return;
+
+			resp.type = HSB_RESP_TYPE_RESULT;
+			resp.u.result.ret_val = ret;
+
+			break;
+		}
+		case HSB_ACT_TYPE_SET_STATUS:
+		{
+			ret = set_dev_status(&act->u.status);
+			if (!reply)
+				return;
+
+			resp.type = HSB_RESP_TYPE_RESULT;
+			resp.u.result.ret_val = ret;
+
+			break;
+		}
+		case HSB_ACT_TYPE_GET_STATUS:
+		{
+			ret = get_dev_status(&act->u.status);
+
+			if (HSB_E_OK != ret) {
+				resp.type = HSB_RESP_TYPE_RESULT;
+				resp.u.result.ret_val = ret;
+			} else {
+				resp.type = HSB_RESP_TYPE_STATUS;
+				memcpy(&resp.u.status, &act->u.status, sizeof(HSB_STATUS_T));
+			}
+			
+			break;
+		}
+		case HSB_ACT_TYPE_DO_ACTION:
+		{
+			ret = set_dev_action(&act->u.action);
+			if (!reply)
+				return;
+
+			resp.type = HSB_RESP_TYPE_RESULT;
+			resp.u.result.ret_val = ret;
+
+			break;
+		}
+		default:
+			hsb_debug("unkown act type\n");
+			if (!reply)
+				return;
+
+			resp.type = HSB_RESP_TYPE_RESULT;
+			resp.u.result.ret_val = HSB_E_NOT_SUPPORTED;
+			break;
+	}
+
+	notify_resp(&resp);
+
+	return;
+}
+
+static void *async_process_thread(thread_data_control *thread_data)
+{
+	HSB_ACT_T *data = NULL;
+
+	pthread_mutex_lock(&thread_data->mutex);
+	
+	while (thread_data->active)
+	{
+		while (0 == g_queue_get_length(thread_data->data_queue) &&
+			thread_data->active)
+		{
+			struct timespec ts;
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_sec++;
+			int error_no = pthread_cond_timedwait(&thread_data->cond, &thread_data->mutex, &ts);
+			if (ETIMEDOUT == error_no)
+				continue;
+		}
+
+		if (thread_data->active == FALSE)
+			break;
+
+		data = (HSB_ACT_T *)g_queue_pop_head(thread_data->data_queue);
+		pthread_mutex_unlock(&thread_data->mutex);
+		if (data == NULL)
+		{
+			pthread_mutex_lock(&thread_data->mutex);
+			continue;
+		}
+
+		/* process data */
+		_process_dev_act(data);
+
+		/* free data */
+		g_slice_free(HSB_ACT_T, data);
+
+		pthread_mutex_lock(&thread_data->mutex);
+	}
+
+	pthread_mutex_unlock(&thread_data->mutex);
+
+	return NULL;
+}
+
+static int init_private_thread(void)
+{
+	thread_data_control *tptr;
+
+	tptr = &gl_dev_cb.async_thread_ctl;
+
+ 	thread_control_init(tptr);
+	thread_control_activate(tptr);
+
+	pthread_t thread_id;
+	if (pthread_create(&tptr->thread_id, NULL, (thread_entry_func)async_process_thread, tptr))
+	{
+		hsb_critical("create async thread failed\n");
+		return -1;
+	}
+
+	return 0;
+}
+
 int init_dev_module(void)
 {
-	g_queue_init(&gl_device_cb.queue);
-	g_mutex_init(&gl_device_cb.mutex);
-	g_queue_init(&gl_device_cb.driverq);
+	g_queue_init(&gl_dev_cb.queue);
+	g_mutex_init(&gl_dev_cb.mutex);
+	g_queue_init(&gl_dev_cb.driverq);
+	g_queue_init(&gl_dev_cb.offq);
 
 	/* reserve hsb id=0 */
-	gl_device_cb.dev_id = 1;
+	gl_dev_cb.dev_id = 1;
+
+	init_private_thread();
 
 	init_virtual_switch_drv();
 
@@ -719,7 +1019,7 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 		return;
 	}
 
-	HSB_WORK_MODE_T work_mode = gl_device_cb.work_mode;
+	HSB_WORK_MODE_T work_mode = gl_dev_cb.work_mode;
 
 	time_t now = time(NULL);
 	struct tm tm_now;
@@ -734,7 +1034,7 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 	HSB_DELAY_T *pdelay = pdev->delay;
 	HSB_DELAY_STATUS_T *dstatus = pdev->delay_status;
 
-	if (sec_today < gl_device_cb.sec_today && sec_today < 10) {
+	if (sec_today < gl_dev_cb.sec_today && sec_today < 10) {
 		bnextday = true;
 		
 		for (cnt = 0; cnt < HSB_DEV_MAX_TIMER_NUM; cnt++, ptimer++, tstatus++) {
@@ -749,7 +1049,7 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 		}
 	}
 
-	gl_device_cb.sec_today = sec_today;
+	gl_dev_cb.sec_today = sec_today;
 
 	if (!CHECK_BIT(pdev->work_mode, work_mode))
 		return;
@@ -785,12 +1085,14 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 			action.devid = pdev->id;
 			action.id = ptimer->act_id;
 			action.param = ptimer->act_param;
-			_set_dev_action(pdev, &action);
+			set_dev_action_async(&action, NULL);
 		} else  {
 			HSB_STATUS_T stat;
-			stat.id = ptimer->act_id;
-			stat.val = ptimer->act_param;
-			_set_dev_status(pdev, &stat, 1);
+			stat.devid = pdev->id;
+			stat.num = 1;
+			stat.id[0] = ptimer->act_id;
+			stat.val[0] = ptimer->act_param;
+			set_dev_status_async(&stat, NULL);
 		}
 
 		if (CHECK_BIT(weekday, 7)) { /* One shot */
@@ -825,12 +1127,14 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 			action.devid = pdev->id;
 			action.id = pdelay->act_id;
 			action.param = pdelay->act_param;
-			_set_dev_action(pdev, &action);
+			set_dev_action_async(&action, NULL);
 		} else  {
 			HSB_STATUS_T stat;
-			stat.id = pdelay->act_id;
-			stat.val = pdelay->act_param;
-			_set_dev_status(pdev, &stat, 1);
+			stat.devid = pdev->id;
+			stat.num = 1;
+			stat.id[0] = pdelay->act_id;
+			stat.val[0] = pdelay->act_param;
+			set_dev_status_async(&stat, NULL);
 		}
 
 		dstatus->started = false;
@@ -841,7 +1145,7 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 
 int check_timer_and_delay(void)
 {
-	GQueue *queue = &gl_device_cb.queue;
+	GQueue *queue = &gl_dev_cb.queue;
 	g_queue_foreach(queue, _check_dev_timer_and_delay, NULL);
 
 	return HSB_E_OK;

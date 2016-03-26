@@ -9,7 +9,7 @@
 #define CORE_TCP_LISTEN_PORT		(18002)
 
 
-int notify_dev_event(HSB_EVT_T *evt);
+int notify_resp(HSB_RESP_T *resp);
 
 int init_network_module(void);
 

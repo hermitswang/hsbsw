@@ -20,11 +20,13 @@
 #include <sys/time.h>
 #include <time.h>
 
-gboolean thread_control_init(thread_data_control *mycontrol) {	
-	if (pthread_mutex_init(&(mycontrol->mutex),NULL))
-    	return FALSE;
-  	if (pthread_cond_init(&(mycontrol->cond),NULL))
+gboolean thread_control_init(thread_data_control *mycontrol)
+{	
+	if (pthread_mutex_init(&(mycontrol->mutex), NULL))
 		return FALSE;
+	if (pthread_cond_init(&(mycontrol->cond), NULL))
+		return FALSE;
+
 	mycontrol->data_queue = g_queue_new();
 	mycontrol->active = FALSE;
 	return TRUE;
@@ -32,14 +34,15 @@ gboolean thread_control_init(thread_data_control *mycontrol) {
 
 gboolean thread_control_destroy(thread_data_control *mycontrol) 
 {
-	int mystatus;	
+	int mystatus;
 	if (pthread_mutex_destroy(&(mycontrol->mutex)))
-    	return FALSE;
+		return FALSE;
 	if (pthread_cond_destroy(&(mycontrol->cond)))
-    	return FALSE;
+		return FALSE;
+
 	g_queue_free(mycontrol->data_queue);
 	mycontrol->active = FALSE;
-  	return TRUE;
+	return TRUE;
 }
 
 gboolean thread_control_activate(thread_data_control *mycontrol) 
@@ -47,32 +50,37 @@ gboolean thread_control_activate(thread_data_control *mycontrol)
 	int mystatus;
 	if (pthread_mutex_lock(&(mycontrol->mutex)))
 		return FALSE;
+
 	mycontrol->active = TRUE ;
-	if ( pthread_mutex_unlock(&(mycontrol->mutex)) )
+	if (pthread_mutex_unlock(&(mycontrol->mutex)))
 		return FALSE;
-	if ( pthread_cond_broadcast(&(mycontrol->cond)) )
+
+	if (pthread_cond_broadcast(&(mycontrol->cond)))
 		return FALSE;
+
 	return TRUE;
 }
 
-gboolean thread_control_deactivate ( thread_data_control *mycontrol) 
+gboolean thread_control_deactivate(thread_data_control *mycontrol) 
 {
-	if ( !mycontrol ) 
-		return FALSE;	
+	if (!mycontrol) 
+		return FALSE;
+
 	if (pthread_mutex_lock(&(mycontrol->mutex)))
-	    return FALSE;
+		return FALSE;
+
 	mycontrol->active = FALSE ;
-	pthread_mutex_unlock ( &(mycontrol->mutex) );
-	pthread_cond_broadcast ( &(mycontrol->cond) );
+	pthread_mutex_unlock(&(mycontrol->mutex));
+	pthread_cond_broadcast(&(mycontrol->cond));
 	return TRUE;
 }
 
 gboolean thread_control_wakeup(thread_data_control *mycontrol) 
 {	
-	if ( !mycontrol ) 
+	if (!mycontrol) 
 		return FALSE;
-	
-	if ( 0 == pthread_cond_signal( &mycontrol->cond ) )
+
+	if (0 == pthread_cond_signal(&mycontrol->cond))
 		return TRUE;
 	else
 		return FALSE;
@@ -80,27 +88,31 @@ gboolean thread_control_wakeup(thread_data_control *mycontrol)
 
 gboolean thread_control_push_data(thread_data_control *mycontrol , gpointer data) 
 {
-	if ( !mycontrol || !data) 
+	if (!mycontrol || !data) 
 		return FALSE;
 	
-	if ( pthread_mutex_lock(&mycontrol->mutex) )
-		return FALSE ;
-	g_queue_push_tail( mycontrol->data_queue,data);
-	if ( pthread_mutex_unlock(&mycontrol->mutex) )
+	if (pthread_mutex_lock(&mycontrol->mutex))
 		return FALSE;
-	return thread_control_wakeup( mycontrol );
+
+	g_queue_push_tail(mycontrol->data_queue,data);
+	if (pthread_mutex_unlock(&mycontrol->mutex))
+		return FALSE;
+
+	return thread_control_wakeup(mycontrol);
 }
 
 gboolean thread_control_push_data_head(thread_data_control *mycontrol , gpointer data) 
 {
-	if ( !mycontrol || !data) 
+	if (!mycontrol || !data) 
 		return FALSE;
 	
-	if ( pthread_mutex_lock(&mycontrol->mutex) )
-		return FALSE ;
-	g_queue_push_head( mycontrol->data_queue,data);
-	if ( pthread_mutex_unlock(&mycontrol->mutex) )
+	if (pthread_mutex_lock(&mycontrol->mutex))
 		return FALSE;
-	return thread_control_wakeup( mycontrol );
+
+	g_queue_push_head(mycontrol->data_queue,data);
+	if (pthread_mutex_unlock(&mycontrol->mutex))
+		return FALSE;
+
+	return thread_control_wakeup(mycontrol);
 }
 

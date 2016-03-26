@@ -37,11 +37,15 @@ static int deal_udp_pkt(int fd, uint8_t *buf, size_t count, struct sockaddr *cli
 	switch (cmd) {
 		case VS_CMD_DEVICE_DISCOVER:
 		{
-			rlen = 8;
+			rlen = 32;
 			SET_CMD_FIELD(rbuf, 0, uint16_t, VS_CMD_DEVICE_DISCOVER_RESP);
 			SET_CMD_FIELD(rbuf, 2, uint16_t, rlen);
 			SET_CMD_FIELD(rbuf, 4, uint8_t, 0);
 			SET_CMD_FIELD(rbuf, 5, uint8_t, 1);
+			SET_CMD_FIELD(rbuf, 8, uint16_t, 0);
+			SET_CMD_FIELD(rbuf, 10, uint16_t, 0);
+
+			memcpy(rbuf + 12, mac, 6);
 
 			printf("recv cmd: device discover\n");
 			break;

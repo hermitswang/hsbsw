@@ -73,14 +73,15 @@ static int _reply_get_device_info(uint8_t *buf, HSB_DEV_T *dev)
 	MAKE_CMD_HDR(buf, HSB_CMD_GET_INFO_RESP, len);
 
 	SET_CMD_FIELD(buf, 4, uint32_t, dev->id); /* device id */
-	SET_CMD_FIELD(buf, 8, uint32_t, dev->driver->drv_id); /* driver id */
-	SET_CMD_FIELD(buf, 12, uint16_t, dev->dev_class); /* device class */
-	SET_CMD_FIELD(buf, 14, uint16_t, dev->interface); /* device interface */
-	memcpy(buf + 16, dev->mac, 6); /* mac address */
+	SET_CMD_FIELD(buf, 8, uint32_t, dev->driver->id); /* driver id */
+	SET_CMD_FIELD(buf, 12, uint16_t, dev->info.cls); /* device class */
+	SET_CMD_FIELD(buf, 14, uint16_t, dev->info.interface); /* device interface */
+	memcpy(buf + 16, dev->info.mac, 6); /* mac address */
 
 	return len;
 }
 
+/*
 static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T *status, int num)
 {
 	int len = 8 + num * 4;
@@ -96,6 +97,7 @@ static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T 
 
 	return len;
 }
+*/
 
 static int  _reply_get_timer(uint8_t *buf, uint32_t dev_id, HSB_TIMER_T *tm)
 {
@@ -157,38 +159,69 @@ static int  _reply_get_linkage(uint8_t *buf, uint32_t dev_id, HSB_LINKAGE_T *lin
 	return len;
 }
 
-static int _get_dev_status(uint8_t *buf, int len, HSB_STATUS_T *status, int *num)
+static int _get_dev_status(uint8_t *buf, int len, HSB_STATUS_T *status)
 {
 	int id, total;
 
 	total = (len - 8) / 4;
 
-	for (id = 0; id < total; id++) {
-		status[id].id = GET_CMD_FIELD(buf, 8 + id * 4, uint16_t);
-		status[id].val = GET_CMD_FIELD(buf, 10 + id * 4, uint16_t);
-		hsb_debug("_get_dev_status: %d=%d\n", status[id].id, status[id].val);
+	if (total > 8) {
+		hsb_debug("too many status %d\n", total);
+		total = 8;
 	}
 
-	*num = total;
+	for (id = 0; id < total; id++) {
+		status->id[id] = GET_CMD_FIELD(buf, 8 + id * 4, uint16_t);
+		status->val[id] = GET_CMD_FIELD(buf, 10 + id * 4, uint16_t);
+		hsb_debug("_get_dev_status: %d=%d\n", status->id[id], status->val[id]);
+	}
+
+	status->num = total;
 
 	return 0;
 }
 
-static int _notify_dev_event(uint8_t *buf, HSB_EVT_T *evt)
+static int _make_notify_resp(uint8_t *buf, HSB_RESP_T *resp)
 {
-	int len = 12;
+	int len = 0;
 
-	MAKE_CMD_HDR(buf, HSB_CMD_EVENT, len);
+	switch (resp->type) {
+		case HSB_RESP_TYPE_EVENT:
+			len = 12;
+			MAKE_CMD_HDR(buf, HSB_CMD_EVENT, len);
+			SET_CMD_FIELD(buf, 4, uint32_t, resp->u.event.devid);
+			SET_CMD_FIELD(buf, 8, uint8_t, resp->u.event.id);
+			SET_CMD_FIELD(buf, 9, uint8_t, resp->u.event.param1);
+			SET_CMD_FIELD(buf, 10, uint16_t, resp->u.event.param2);
+			break;
+		case HSB_RESP_TYPE_RESULT:
+			len = 8;
+			MAKE_CMD_HDR(buf, HSB_CMD_RESULT, len);
+			SET_CMD_FIELD(buf, 4, uint16_t, resp->u.result.ret_val);
+			break;
+		case HSB_RESP_TYPE_STATUS:
+		{
+			HSB_STATUS_T *pstat = &resp->u.status;
+			len = 8 + pstat->num * 4;
+			MAKE_CMD_HDR(buf, HSB_CMD_GET_STATUS_RESP, len);
+			SET_CMD_FIELD(buf, 4, uint32_t, pstat->devid);
 
-	SET_CMD_FIELD(buf, 4, uint32_t, evt->devid);
-	SET_CMD_FIELD(buf, 8, uint8_t, evt->id);
-	SET_CMD_FIELD(buf, 9, uint8_t, evt->param1);
-	SET_CMD_FIELD(buf, 10, uint16_t, evt->param2);
+			int id;
+			for (id = 0; id < pstat->num; id++) {
+				SET_CMD_FIELD(buf, 8 + 4 * id, uint16_t, pstat->id[id]);
+				SET_CMD_FIELD(buf, 10 + 4 * id, uint16_t, pstat->val[id]);
+			}
+			break;
+		}
+		default:
+			hsb_debug("invalid resp %d\n", resp->type);
+			break;
+	}
 
 	return len;
 }
 
-int deal_tcp_packet(int fd, uint8_t *buf, int len)
+int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 {
 	int ret = 0;
 	int rlen = 0;
@@ -230,29 +263,26 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 		}
 		case HSB_CMD_GET_STATUS:
 		{
-			HSB_STATUS_T status[16];
-			int status_num = 16;
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
 
-			ret = get_dev_status(dev_id, status, &status_num);
-			if (HSB_E_OK != ret)
-				rlen = _reply_result(reply_buf, ret);
-			else
-				rlen = _reply_get_device_status(reply_buf, dev_id, status, status_num);
+			ret = get_dev_status_async(dev_id, reply);
+
+			rlen = 0;
 
 			break;
 		}
 		case HSB_CMD_SET_STATUS:
 		{
+			HSB_STATUS_T status = { 0 };
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-			HSB_STATUS_T status[16];
-			int status_num;
 
-			_get_dev_status(buf, len, status, &status_num);
+			status.devid = dev_id;
 
-			ret = set_dev_status(dev_id, status, status_num);
+			_get_dev_status(buf, len, &status);
 
-			rlen = _reply_result(reply_buf, ret);
+			ret = set_dev_status_async(&status, reply);
+
+			rlen = 0;
 
 			break;
 		}
@@ -399,16 +429,24 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			act.id = GET_CMD_FIELD(buf, 8, uint16_t);
 			act.param = GET_CMD_FIELD(buf, 10, uint16_t);
 
-			ret = set_dev_action(&act);
-			rlen = _reply_result(reply_buf, ret);
+			ret = set_dev_action_async(&act, reply);
+
+			rlen = 0;
+ 	
 			break;
 		}
 		case HSB_CMD_PROBE_DEV:
 		{
 			uint16_t type = GET_CMD_FIELD(buf, 4, uint16_t);
+			HSB_PROBE_T probe;
+
+			probe.drvid = type;
+
 			hsb_debug("probe\n");
-			ret = probe_dev(type);
-			rlen = _reply_result(reply_buf, ret);
+
+			ret = probe_dev_async(&probe, reply);
+
+			rlen = 0;
 
 			break;
 		}
@@ -417,13 +455,15 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len)
 			break;
 	}
 
-	if (rlen <= 0) {
+	if (rlen < 0) {
 		hsb_debug("rlen%d<0\n", rlen);
 		return -2;
 	}
 
-	struct timeval tv = { 1, 0 };
-	ret = write_timeout(fd, reply_buf, rlen, &tv);
+	if (rlen > 0) {
+		struct timeval tv = { 1, 0 };
+		ret = write_timeout(fd, reply_buf, rlen, &tv);
+	}
 
 	return 0;
 }
@@ -659,23 +699,22 @@ static void *tcp_listen_thread(void *arg)
 
 static int _process_notify(int fd, tcp_client_context *pctx)
 {
-	HSB_EVT_T *evt;
-	uint8_t buf[32];
+	HSB_RESP_T *resp = NULL;
+	uint8_t buf[64];
 	int ret, len;
 
 	while (!g_queue_is_empty(&pctx->queue)) {
-		evt = g_queue_peek_head(&pctx->queue);
+		resp = g_queue_pop_head(&pctx->queue);
 
 		memset(buf, 0, sizeof(buf));
 
-		len = _notify_dev_event(buf, evt);
+		len = _make_notify_resp(buf, resp);
 
 		ret = write(fd, buf, len);
 		if (ret <= 0)
 			return ret;
 
-		g_queue_pop_head(&pctx->queue);
-		g_slice_free(HSB_EVT_T, evt);
+		g_slice_free(HSB_RESP_T, resp);
 	}
 
 	return 0;
@@ -711,7 +750,7 @@ static void tcp_client_handler(gpointer data, gpointer user_data)
 				break;
 			}
 
-			ret = deal_tcp_packet(sockfd, msg, nread);
+			ret = deal_tcp_packet(sockfd, msg, nread, pctx);
 			if (ret) {
 				break;
 			}
@@ -732,9 +771,10 @@ static void tcp_client_handler(gpointer data, gpointer user_data)
 
 #define NOTIFY_MESSAGE	"notify"
 
-static void _notify(HSB_EVT_T *msg)
+int notify_resp(HSB_RESP_T *msg)
 {
 	int cnt, fd;
+	HSB_RESP_T *notify = NULL;
 	tcp_client_context *pctx = NULL;
 
 	for (cnt = 0; cnt < MAX_TCP_CLIENT_NUM; cnt++) {
@@ -742,9 +782,19 @@ static void _notify(HSB_EVT_T *msg)
 		if (!pctx->using)
 			continue;
 
+		if (msg->type != HSB_RESP_TYPE_EVENT &&
+		    msg->reply != (void *)pctx)
+			continue;
+
+		notify = g_slice_dup(HSB_RESP_T, msg);
+		if (!notify) {
+			hsb_debug("no memory\n");
+			continue;
+		}
+
 		g_mutex_lock(&pctx->mutex);
 
-		g_queue_push_tail(&pctx->queue, msg);
+		g_queue_push_tail(&pctx->queue, notify);
 
 		g_mutex_unlock(&pctx->mutex);
 
@@ -752,19 +802,6 @@ static void _notify(HSB_EVT_T *msg)
 		unix_socket_send_to(fd, pctx->listen_path, NOTIFY_MESSAGE, strlen(NOTIFY_MESSAGE));
 		unix_socket_free(fd);
 	}
-}
-
-int notify_dev_event(HSB_EVT_T *evt)
-{
-	HSB_EVT_T *notify = g_slice_dup(HSB_EVT_T, evt);
-	if (!notify) {
-		hsb_critical("alloc notify fail\n");
-		return -1;
-	}
-
-	_notify(notify);
-
-	return 0;
 }
 
 int init_network_module(void)
