@@ -101,7 +101,7 @@ static int _reply_get_device_status(uint8_t *buf, uint32_t dev_id, HSB_STATUS_T 
 
 static int  _reply_get_timer(uint8_t *buf, uint32_t dev_id, HSB_TIMER_T *tm)
 {
-	int len = 20;
+	int len = 24;
 	
 	MAKE_CMD_HDR(buf, HSB_CMD_GET_TIMER_RESP, len);
 
@@ -114,14 +114,15 @@ static int  _reply_get_timer(uint8_t *buf, uint32_t dev_id, HSB_TIMER_T *tm)
 	SET_CMD_FIELD(buf, 14, uint8_t, tm->sec);
 	SET_CMD_FIELD(buf, 15, uint8_t, tm->wday);
 	SET_CMD_FIELD(buf, 16, uint16_t, tm->act_id);
-	SET_CMD_FIELD(buf, 18, uint16_t, tm->act_param);
+	SET_CMD_FIELD(buf, 18, uint16_t, tm->act_param1);
+	SET_CMD_FIELD(buf, 20, uint32_t, tm->act_param2);
 
 	return len;
 }
 
 static int  _reply_get_delay(uint8_t *buf, uint32_t dev_id, HSB_DELAY_T *delay)
 {
-	int len = 24;
+	int len = 32;
 	
 	MAKE_CMD_HDR(buf, HSB_CMD_GET_DELAY_RESP, len);
 
@@ -129,19 +130,20 @@ static int  _reply_get_delay(uint8_t *buf, uint32_t dev_id, HSB_DELAY_T *delay)
 	SET_CMD_FIELD(buf, 8, uint16_t, delay->id);
 	SET_CMD_FIELD(buf, 10, uint8_t, delay->work_mode);
 	SET_CMD_FIELD(buf, 11, uint8_t, delay->flag);
-	SET_CMD_FIELD(buf, 12, uint8_t, delay->evt_id);
-	SET_CMD_FIELD(buf, 13, uint8_t, delay->evt_param1);
-	SET_CMD_FIELD(buf, 14, uint16_t, delay->evt_param2);
-	SET_CMD_FIELD(buf, 16, uint16_t, delay->act_id);
-	SET_CMD_FIELD(buf, 18, uint16_t, delay->act_param);
-	SET_CMD_FIELD(buf, 20, uint32_t, delay->delay_sec);
+	SET_CMD_FIELD(buf, 12, uint16_t, delay->evt_id);
+	SET_CMD_FIELD(buf, 14, uint16_t, delay->evt_param1);
+	SET_CMD_FIELD(buf, 16, uint32_t, delay->evt_param2);
+	SET_CMD_FIELD(buf, 20, uint16_t, delay->act_id);
+	SET_CMD_FIELD(buf, 22, uint16_t, delay->act_param1);
+	SET_CMD_FIELD(buf, 24, uint32_t, delay->act_param2);
+	SET_CMD_FIELD(buf, 28, uint32_t, delay->delay_sec);
 
 	return len;
 }
 
 static int  _reply_get_linkage(uint8_t *buf, uint32_t dev_id, HSB_LINKAGE_T *link)
 {
-	int len = 24;
+	int len = 32;
 	
 	MAKE_CMD_HDR(buf, HSB_CMD_GET_LINKAGE_RESP, len);
 
@@ -149,12 +151,13 @@ static int  _reply_get_linkage(uint8_t *buf, uint32_t dev_id, HSB_LINKAGE_T *lin
 	SET_CMD_FIELD(buf, 8, uint16_t,link->id);
 	SET_CMD_FIELD(buf, 10, uint8_t,link->work_mode);
 	SET_CMD_FIELD(buf, 11, uint8_t,link->flag);
-	SET_CMD_FIELD(buf, 12, uint8_t, link->evt_id);
-	SET_CMD_FIELD(buf, 13, uint8_t, link->evt_param1);
-	SET_CMD_FIELD(buf, 14, uint16_t, link->evt_param2);
-	SET_CMD_FIELD(buf, 16, uint32_t, link->act_devid);
-	SET_CMD_FIELD(buf, 20, uint16_t, link->act_id);
-	SET_CMD_FIELD(buf, 22, uint16_t, link->act_param);
+	SET_CMD_FIELD(buf, 12, uint16_t, link->evt_id);
+	SET_CMD_FIELD(buf, 14, uint16_t, link->evt_param1);
+	SET_CMD_FIELD(buf, 16, uint32_t, link->evt_param2);
+	SET_CMD_FIELD(buf, 20, uint32_t, link->act_devid);
+	SET_CMD_FIELD(buf, 24, uint16_t, link->act_id);
+	SET_CMD_FIELD(buf, 26, uint16_t, link->act_param1);
+	SET_CMD_FIELD(buf, 28, uint32_t, link->act_param2);
 
 	return len;
 }
@@ -187,12 +190,12 @@ static int _make_notify_resp(uint8_t *buf, HSB_RESP_T *resp)
 
 	switch (resp->type) {
 		case HSB_RESP_TYPE_EVENT:
-			len = 12;
+			len = 16;
 			MAKE_CMD_HDR(buf, HSB_CMD_EVENT, len);
 			SET_CMD_FIELD(buf, 4, uint32_t, resp->u.event.devid);
-			SET_CMD_FIELD(buf, 8, uint8_t, resp->u.event.id);
-			SET_CMD_FIELD(buf, 9, uint8_t, resp->u.event.param1);
-			SET_CMD_FIELD(buf, 10, uint16_t, resp->u.event.param2);
+			SET_CMD_FIELD(buf, 8, uint16_t, resp->u.event.id);
+			SET_CMD_FIELD(buf, 10, uint16_t, resp->u.event.param1);
+			SET_CMD_FIELD(buf, 12, uint32_t, resp->u.event.param2);
 			break;
 		case HSB_RESP_TYPE_RESULT:
 			len = 8;
@@ -314,7 +317,8 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 			tm.sec = GET_CMD_FIELD(buf, 14, uint8_t);
 			tm.wday = GET_CMD_FIELD(buf, 15, uint8_t);
 			tm.act_id = GET_CMD_FIELD(buf, 16, uint16_t);
-			tm.act_param = GET_CMD_FIELD(buf, 18, uint16_t);
+			tm.act_param1 = GET_CMD_FIELD(buf, 18, uint16_t);
+			tm.act_param2 = GET_CMD_FIELD(buf, 20, uint32_t);
 
 			ret = set_dev_timer(dev_id, &tm);
 			if (ret)
@@ -355,12 +359,13 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 			delay.id = delay_id;
 			delay.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
 			delay.flag = GET_CMD_FIELD(buf, 11, uint8_t);
-			delay.evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
-			delay.evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
-			delay.evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
-			delay.act_id = GET_CMD_FIELD(buf, 16, uint16_t);
-			delay.act_param = GET_CMD_FIELD(buf, 18, uint16_t);
-			delay.delay_sec = GET_CMD_FIELD(buf, 20, uint32_t);
+			delay.evt_id = GET_CMD_FIELD(buf, 12, uint16_t);
+			delay.evt_param1 = GET_CMD_FIELD(buf, 14, uint16_t);
+			delay.evt_param2 = GET_CMD_FIELD(buf, 16, uint32_t);
+			delay.act_id = GET_CMD_FIELD(buf, 20, uint16_t);
+			delay.act_param1 = GET_CMD_FIELD(buf, 22, uint16_t);
+			delay.act_param2 = GET_CMD_FIELD(buf, 24, uint32_t);
+			delay.delay_sec = GET_CMD_FIELD(buf, 28, uint32_t);
 
 			ret = set_dev_delay(dev_id, &delay);
 			rlen = _reply_result(reply_buf, ret);
@@ -400,12 +405,13 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 			link.id = link_id;
 			link.work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
 			link.flag = GET_CMD_FIELD(buf, 11, uint8_t);
-			link.evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
-			link.evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
-			link.evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
-			link.act_devid = GET_CMD_FIELD(buf, 16, uint32_t);
-			link.act_id = GET_CMD_FIELD(buf, 20, uint16_t);
-			link.act_param = GET_CMD_FIELD(buf, 22, uint16_t);
+			link.evt_id = GET_CMD_FIELD(buf, 12, uint16_t);
+			link.evt_param1 = GET_CMD_FIELD(buf, 14, uint16_t);
+			link.evt_param2 = GET_CMD_FIELD(buf, 16, uint32_t);
+			link.act_devid = GET_CMD_FIELD(buf, 20, uint32_t);
+			link.act_id = GET_CMD_FIELD(buf, 24, uint16_t);
+			link.act_param1 = GET_CMD_FIELD(buf, 26, uint16_t);
+			link.act_param2 = GET_CMD_FIELD(buf, 28, uint32_t);
 
 			ret = set_dev_linkage(dev_id, &link);
 			rlen = _reply_result(reply_buf, ret);
@@ -427,7 +433,8 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 
 			act.devid = dev_id;
 			act.id = GET_CMD_FIELD(buf, 8, uint16_t);
-			act.param = GET_CMD_FIELD(buf, 10, uint16_t);
+			act.param1 = GET_CMD_FIELD(buf, 10, uint16_t);
+			act.param2 = GET_CMD_FIELD(buf, 12, uint32_t);
 
 			ret = set_dev_action_async(&act, reply);
 

@@ -431,14 +431,15 @@ static int check_linkage(uint32_t devid, HSB_EVT_T *evt)
 			HSB_ACTION_T action;
 			action.devid = link->act_devid;
 			action.id = link->act_id;
-			action.param = link->act_param;
+			action.param1 = link->act_param1;
+			action.param2 = link->act_param2;
 			set_dev_action_async(&action, NULL);
 		} else  {
 			HSB_STATUS_T stat;
 			stat.devid = link->act_devid;
 			stat.num = 1;
 			stat.id[0] = link->act_id;
-			stat.val[0] = link->act_param;
+			stat.val[0] = link->act_param1;
 			set_dev_status_async(&stat, NULL);
 		}
 	}
@@ -447,7 +448,7 @@ static int check_linkage(uint32_t devid, HSB_EVT_T *evt)
 }
 
 
-static _dev_event(uint32_t devid, HSB_EVT_TYPE_T type, uint8_t param1, uint16_t param2)
+static _dev_event(uint32_t devid, HSB_EVT_TYPE_T type, uint16_t param1, uint32_t param2)
 {
 	HSB_RESP_T resp = { 0 };
 
@@ -460,7 +461,7 @@ static _dev_event(uint32_t devid, HSB_EVT_TYPE_T type, uint8_t param1, uint16_t 
 
 	check_linkage(devid, &resp.u.event);
 
-	hsb_debug("get event: %d, %d, %d, %d\n", devid, type, param1, param2);
+	hsb_debug("get event: %d, %d, %d, %x\n", devid, type, param1, param2);
 
 	return notify_resp(&resp);
 }
@@ -483,6 +484,11 @@ int dev_sensor_triggered(uint32_t devid, HSB_SENSOR_TYPE_T type)
 int dev_sensor_recovered(uint32_t devid, HSB_SENSOR_TYPE_T type)
 {
 	return _dev_event(devid, HSB_EVT_TYPE_SENSOR_RECOVERED, type, 0);
+}
+
+int dev_ir_key(uint32_t devid, uint16_t param1, uint32_t param2)
+{
+	return _dev_event(devid, HSB_EVT_TYPE_IR_KEY, param1, param2);
 }
 
 int dev_mode_changed(HSB_WORK_MODE_T mode)
@@ -1084,14 +1090,15 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 			HSB_ACTION_T action;
 			action.devid = pdev->id;
 			action.id = ptimer->act_id;
-			action.param = ptimer->act_param;
+			action.param1 = ptimer->act_param1;
+			action.param2 = ptimer->act_param2;
 			set_dev_action_async(&action, NULL);
 		} else  {
 			HSB_STATUS_T stat;
 			stat.devid = pdev->id;
 			stat.num = 1;
 			stat.id[0] = ptimer->act_id;
-			stat.val[0] = ptimer->act_param;
+			stat.val[0] = ptimer->act_param1;
 			set_dev_status_async(&stat, NULL);
 		}
 
@@ -1126,14 +1133,15 @@ static void _check_dev_timer_and_delay(void *data, void *user_data)
 			HSB_ACTION_T action;
 			action.devid = pdev->id;
 			action.id = pdelay->act_id;
-			action.param = pdelay->act_param;
+			action.param1 = pdelay->act_param1;
+			action.param2 = pdelay->act_param2;
 			set_dev_action_async(&action, NULL);
 		} else  {
 			HSB_STATUS_T stat;
 			stat.devid = pdev->id;
 			stat.num = 1;
 			stat.id[0] = pdelay->act_id;
-			stat.val[0] = pdelay->act_param;
+			stat.val[0] = pdelay->act_param1;
 			set_dev_status_async(&stat, NULL);
 		}
 

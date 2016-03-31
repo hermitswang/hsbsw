@@ -72,12 +72,13 @@ static int deal_tcp_pkt(int fd, void *buf, size_t count)
 			uint8_t sec = GET_CMD_FIELD(buf, 14, uint8_t);
 			uint8_t wday = GET_CMD_FIELD(buf, 15, uint8_t);
 			uint16_t act_id = GET_CMD_FIELD(buf, 16, uint16_t);
-			uint16_t act_param = GET_CMD_FIELD(buf, 18, uint16_t);
+			uint16_t act_param1 = GET_CMD_FIELD(buf, 18, uint16_t);
+			uint32_t act_param2 = GET_CMD_FIELD(buf, 20, uint32_t);
 
 			printf("get dev %d timer info:\n", dev_id);
 			printf("id=%d, work_mode=%d, flag=%02x, hour=%d, min=%d, sec=%d, wday=%02x\n",
 				timer_id, work_mode, flag, hour, min, sec, wday);
-			printf("act: %d, param=%d\n", act_id, act_param);
+			printf("act: %d, param1=%d, param2=%x\n", act_id, act_param1, act_param2);
 			break;
 		}
 		case HSB_CMD_GET_DELAY_RESP:
@@ -87,17 +88,18 @@ static int deal_tcp_pkt(int fd, void *buf, size_t count)
 			uint16_t delay_id = GET_CMD_FIELD(buf, 8, uint16_t);
 			uint8_t work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
 			uint8_t flag = GET_CMD_FIELD(buf, 11, uint8_t);
-			uint8_t evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
-			uint8_t evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
-			uint16_t evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
-			uint16_t act_id = GET_CMD_FIELD(buf, 16, uint16_t);
-			uint16_t act_param = GET_CMD_FIELD(buf, 18, uint16_t);
-			uint32_t delay_sec = GET_CMD_FIELD(buf, 20, uint32_t);
+			uint16_t evt_id = GET_CMD_FIELD(buf, 12, uint16_t);
+			uint16_t evt_param1 = GET_CMD_FIELD(buf, 14, uint16_t);
+			uint32_t evt_param2 = GET_CMD_FIELD(buf, 16, uint32_t);
+			uint16_t act_id = GET_CMD_FIELD(buf, 20, uint16_t);
+			uint16_t act_param1 = GET_CMD_FIELD(buf, 22, uint16_t);
+			uint32_t act_param2 = GET_CMD_FIELD(buf, 24, uint32_t);
+			uint32_t delay_sec = GET_CMD_FIELD(buf, 28, uint32_t);
 
 			printf("get dev %d delay info:\n", dev_id);
 			printf("id=%d, work_mode=%d, flag=%d, delay=%d\n", delay_id, work_mode, flag, delay_sec);
 			printf("evt id=%d, param=%d, param2=%d\n", evt_id, evt_param1, evt_param2);
-			printf("act id=%d, param=%d\n", act_id, act_param);
+			printf("act id=%d, param1=%d, param2=%x\n", act_id, act_param1, act_param2);
 			break;
 		}
 		case HSB_CMD_GET_LINKAGE_RESP:
@@ -107,28 +109,30 @@ static int deal_tcp_pkt(int fd, void *buf, size_t count)
 			uint16_t link_id = GET_CMD_FIELD(buf, 8, uint16_t);
 			uint8_t work_mode = GET_CMD_FIELD(buf, 10, uint8_t);
 			uint8_t flag = GET_CMD_FIELD(buf, 11, uint8_t);
-			uint8_t evt_id = GET_CMD_FIELD(buf, 12, uint8_t);
-			uint8_t evt_param1 = GET_CMD_FIELD(buf, 13, uint8_t);
-			uint16_t evt_param2 = GET_CMD_FIELD(buf, 14, uint16_t);
-			uint32_t act_devid = GET_CMD_FIELD(buf, 16, uint32_t);
-			uint16_t act_id = GET_CMD_FIELD(buf, 20, uint16_t);
-			uint16_t act_param = GET_CMD_FIELD(buf, 22, uint16_t);
+			uint16_t evt_id = GET_CMD_FIELD(buf, 12, uint16_t);
+			uint16_t evt_param1 = GET_CMD_FIELD(buf, 14, uint16_t);
+			uint32_t evt_param2 = GET_CMD_FIELD(buf, 16, uint32_t);
+			uint32_t act_devid = GET_CMD_FIELD(buf, 20, uint32_t);
+			uint16_t act_id = GET_CMD_FIELD(buf, 24, uint16_t);
+			uint16_t act_param1 = GET_CMD_FIELD(buf, 26, uint16_t);
+			uint32_t act_param2 = GET_CMD_FIELD(buf, 28, uint32_t);
+	
 
 			printf("get dev %d linkage info:\n", dev_id);
 			printf("id=%d, work_mode=%d, flag=%d, link devid=%d\n", link_id, work_mode, flag, act_devid);
 			printf("evt id=%d, param1=%d, param2=%d\n", evt_id, evt_param1, evt_param2);
-			printf("act id=%d, param1=%d\n", act_id, act_param);
+			printf("act id=%d, param1=%d, param2=%x\n", act_id, act_param1, act_param2);
 
 			break;
 		}
 		case HSB_CMD_EVENT:
 		{
 			dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
-			uint8_t evt_id = GET_CMD_FIELD(buf, 8, uint8_t);
-			uint8_t evt_param1 = GET_CMD_FIELD(buf, 9, uint8_t);
-			uint16_t evt_param2 = GET_CMD_FIELD(buf, 10, uint16_t);
+			uint16_t evt_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			uint16_t evt_param1 = GET_CMD_FIELD(buf, 10, uint16_t);
+			uint32_t evt_param2 = GET_CMD_FIELD(buf, 12, uint32_t);
 
-			printf("dev %d event: id=%d, param1=%d, param2=%d\n", dev_id, evt_id, evt_param1, evt_param2);
+			printf("dev %d event: id=%d, param1=%d, param2=%x\n", dev_id, evt_id, evt_param1, evt_param2);
 			break;
 		}
 		case HSB_CMD_RESULT:
@@ -162,6 +166,7 @@ static int deal_input_cmd(int fd, void *buf, size_t count)
 	uint16_t act_id;
 	uint16_t act_param;
 	int val1, val2, val3;
+	uint32_t val4;
 
 	memset(rbuf, 0, sizeof(rbuf));
 
@@ -193,7 +198,7 @@ static int deal_input_cmd(int fd, void *buf, size_t count)
 		SET_CMD_FIELD(rbuf, 4, uint32_t, val1);
 		SET_CMD_FIELD(rbuf, 8, uint16_t, val2);
 	} else if (2 == sscanf(buf, "set timer %d %d", &val1, &val2)) {
-		len = 20;
+		len = 24;
 		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_SET_TIMER);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
 		SET_CMD_FIELD(rbuf, 4, uint32_t, val1);
@@ -217,13 +222,15 @@ static int deal_input_cmd(int fd, void *buf, size_t count)
 		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_PROBE_DEV);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
 		SET_CMD_FIELD(rbuf, 4, uint16_t, val1);
-	} else if (3 == sscanf(buf, "action %d %d %d", &val1, &val2, &val3)) {
-		len = 12;
+	} else if (4 == sscanf(buf, "action %d %d %d %x", &val1, &val2, &val3, &val4)) {
+		len = 16;
 		SET_CMD_FIELD(rbuf, 0, uint16_t, HSB_CMD_DO_ACTION);
 		SET_CMD_FIELD(rbuf, 2, uint16_t, len);
-		SET_CMD_FIELD(rbuf, 4, uint32_t, val1);
-		SET_CMD_FIELD(rbuf, 8, uint16_t, val2);
-		SET_CMD_FIELD(rbuf, 10, uint16_t, val3);
+		SET_CMD_FIELD(rbuf, 4, uint32_t, val1);	/* devid */
+		SET_CMD_FIELD(rbuf, 8, uint16_t, val2); /* action type */
+		SET_CMD_FIELD(rbuf, 10, uint16_t, val3); /* action param */
+		SET_CMD_FIELD(rbuf, 12, uint32_t, val4); /* action param2 */
+
 		printf("action devid=%d\n", val1);
 	} else {
 		printf("invalid cmd\n");

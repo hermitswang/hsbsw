@@ -26,9 +26,10 @@ typedef struct {
 } VS_INFO_T;
 
 typedef enum {
-	VS_EVT_TYPE_SENSOR_TRIGGERED,
+	VS_EVT_TYPE_SENSOR_TRIGGERED = 0,
 	VS_EVT_TYPE_SENSOR_RECOVERED,
 	VS_EVT_TYPE_KEY_PRESSED,
+	VS_EVT_TYPE_IR_KEY,
 } VS_EVT_TYPE_T;
 
 typedef enum {
@@ -300,12 +301,13 @@ static int virtual_switch_set_action(const HSB_ACTION_T *act)
 	if (!pdev)
 		return HSB_E_ENTRY_NOT_FOUND;
 
-	len = 8;
+	len = 12;
 	memset(wbuf, 0, sizeof(wbuf));
 	SET_CMD_FIELD(wbuf, 0, uint16_t, VS_CMD_DO_ACTION);
 	SET_CMD_FIELD(wbuf, 2, uint16_t, len);
 	SET_CMD_FIELD(wbuf, 4, uint16_t, act->id);
-	SET_CMD_FIELD(wbuf, 6, uint16_t, act->param);
+	SET_CMD_FIELD(wbuf, 6, uint16_t, act->param1);
+	SET_CMD_FIELD(wbuf, 8, uint32_t, act->param2);
 
 	ret = _transfer(&pdev->ip, wbuf, len, rbuf, sizeof(rbuf));
 
@@ -445,7 +447,12 @@ static int _key(uint16_t key)
 	return ret;
 }
 
-static int _event(uint32_t devid, uint16_t id, uint16_t param)
+static int _ir_key(uint32_t devid, uint16_t param, uint32_t param2)
+{
+	return dev_ir_key(devid, param, param2);
+}
+
+static int _event(uint32_t devid, uint16_t id, uint16_t param, uint32_t param2)
 {
 	int ret = HSB_E_OK;
 
@@ -458,6 +465,9 @@ static int _event(uint32_t devid, uint16_t id, uint16_t param)
 			break;
 		case VS_EVT_TYPE_KEY_PRESSED:
 			ret = _key(param);
+			break;
+		case VS_EVT_TYPE_IR_KEY:
+			ret = _ir_key(devid, param, param2);
 			break;
 		default:
 			hsb_debug("unknown event %x\n", id);
@@ -552,8 +562,9 @@ static void *_monitor_thread(void *arg)
 			{
 				uint16_t id = GET_CMD_FIELD(rbuf, 4, uint16_t);
 				uint16_t param = GET_CMD_FIELD(rbuf, 6, uint16_t);
+				uint32_t param2 = GET_CMD_FIELD(rbuf, 8, uint32_t);
 
-				_event(pdev->id, id, param);
+				_event(pdev->id, id, param, param2);
 				break;
 			}
 			default:

@@ -12,14 +12,15 @@
 typedef struct {
 	uint32_t	devid;
 	uint16_t	id;
-	uint16_t	param;
+	uint16_t	param1;
+	uint32_t	param2;
 } HSB_ACTION_T;
 
 typedef struct {
 	uint32_t	devid;
-	uint8_t		id;
-	uint8_t		param1;
-	uint16_t	param2;
+	uint16_t	id;
+	uint16_t	param1;
+	uint32_t	param2;
 } HSB_EVT_T;
 
 typedef struct {
@@ -96,7 +97,8 @@ typedef struct _HSB_TIMER_T {
 	uint8_t		sec;
 	uint8_t		wday;
 	uint16_t	act_id;
-	uint16_t	act_param;
+	uint16_t	act_param1;
+	uint32_t	act_param2;
 } HSB_TIMER_T;
 
 typedef struct {
@@ -108,11 +110,12 @@ typedef struct _HSB_DELAY_T {
 	uint16_t	id;
 	uint8_t		work_mode;
 	uint8_t		flag;
-	uint8_t		evt_id;
-	uint8_t		evt_param1;
-	uint16_t	evt_param2;
+	uint16_t	evt_id;
+	uint16_t	evt_param1;
+	uint32_t	evt_param2;
 	uint16_t	act_id;
-	uint16_t	act_param;
+	uint16_t	act_param1;
+	uint32_t	act_param2;
 	uint32_t	delay_sec;
 } HSB_DELAY_T;
 
@@ -126,12 +129,13 @@ typedef struct _HSB_LINKAGE_T {
 	uint16_t	id;
 	uint8_t		work_mode;
 	uint8_t		flag;
-	uint8_t		evt_id;
-	uint8_t		evt_param1;
-	uint16_t	evt_param2;
+	uint16_t	evt_id;
+	uint16_t	evt_param1;
+	uint32_t	evt_param2;
 	uint32_t	act_devid;
 	uint16_t	act_id;
-	uint16_t	act_param;
+	uint16_t	act_param1;
+	uint32_t	act_param2;
 } HSB_LINKAGE_T;
 
 typedef struct {
@@ -207,6 +211,7 @@ int dev_status_updated(uint32_t devid, HSB_STATUS_T *status);
 int dev_updated(uint32_t devid, HSB_DEV_UPDATED_TYPE_T type);
 int dev_sensor_triggered(uint32_t devid, HSB_SENSOR_TYPE_T type);
 int dev_sensor_recovered(uint32_t devid, HSB_SENSOR_TYPE_T type);
+int dev_ir_key(uint32_t devid, uint16_t param1, uint32_t param2);
 int dev_mode_changed(HSB_WORK_MODE_T mode);
 
 int set_box_work_mode(HSB_WORK_MODE_T mode);
