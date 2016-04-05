@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define ETH_INTERFACE	"eth0"
+#define ETH_INTERFACE	"wlan0"
 
 #define GET_CMD_FIELD(_buf, _off, _type)  *(_type *)(_buf + _off)
 
@@ -22,6 +22,6 @@ int open_udp_clientfd(void);
 void make_sockaddr(struct sockaddr_in *dst, const struct in_addr *addr, unsigned short port);
 
 int set_broadcast(int sockfd, bool enable);
-int get_broadcast_address(int sockfd, const char *eth_intf, struct in_addr *addr);
+int get_broadcast_address(int sockfd, struct in_addr *addr);
 
 #endif

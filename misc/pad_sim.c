@@ -299,7 +299,7 @@ static int probe_box(struct in_addr *addr)
 
 	sockfd = open_udp_clientfd();
 
-	if (get_broadcast_address(sockfd, "eth0", &servaddr.sin_addr) < 0)
+	if (get_broadcast_address(sockfd, &servaddr.sin_addr) < 0)
 	{
 		close(sockfd);
 		return -1;

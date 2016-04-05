@@ -123,7 +123,7 @@ static int virtual_switch_probe(void)
 	int sockfd = open_udp_clientfd();
 
 	/* 2.send broadcast packet, 192.168.2.255:19001 */
-	if (get_broadcast_address(sockfd, "eth0", &servaddr.sin_addr)) {
+	if (get_broadcast_address(sockfd, &servaddr.sin_addr)) {
 		close(sockfd);
 		return -1;
 	}
@@ -492,7 +492,7 @@ static void *_monitor_thread(void *arg)
 
 	set_broadcast(fd, true);
 
-	get_broadcast_address(fd, ETH_INTERFACE, &mc_addr.sin_addr);
+	get_broadcast_address(fd, &mc_addr.sin_addr);
 	mc_addr.sin_family = AF_INET;
 	mc_addr.sin_port = htons(VIRTUAL_SWITCH_LISTEN_PORT);
 

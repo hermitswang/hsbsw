@@ -23,6 +23,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <stdbool.h>
+#include "network_utils.h"
 
 int connect_nonb(const char *ip,int port,struct timeval *timeout) 
 {
@@ -191,11 +192,11 @@ int set_broadcast(int sockfd, bool enable)
 	return ret;
 }	
 
-int get_broadcast_address(int sockfd, const char *eth_intf, struct in_addr *addr)
+int get_broadcast_address(int sockfd, struct in_addr *addr)
 {
 	struct sockaddr_in taddr;
 	struct ifreq ifr;
-	strncpy(ifr.ifr_name, eth_intf, sizeof(ifr.ifr_name));
+	strncpy(ifr.ifr_name, ETH_INTERFACE, sizeof(ifr.ifr_name));
 
 	if (ioctl(sockfd, SIOCGIFBRDADDR, &ifr) < 0)
 	{

@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
 	}
 
 	set_broadcast(sockfd, true);
-	get_broadcast_address(sockfd, "eth0", &mcastaddr.sin_addr);
+	get_broadcast_address(sockfd, &mcastaddr.sin_addr);
 	mcastaddr.sin_family = AF_INET;
 	mcastaddr.sin_port = htons(19002);
 
