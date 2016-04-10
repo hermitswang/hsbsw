@@ -211,3 +211,28 @@ int get_broadcast_address(int sockfd, struct in_addr *addr)
 	return 0;
 }
 
+int get_ip(struct in_addr *addr)
+{
+	struct sockaddr_in taddr;
+	struct ifreq ifr;
+	strncpy(ifr.ifr_name, ETH_INTERFACE, sizeof(ifr.ifr_name));
+
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sockfd < 0) {
+		printf("socket fail\n");
+		return -1;
+	}
+
+	if (ioctl(sockfd, SIOCGIFADDR, &ifr) < 0)
+	{
+		printf("get ip fail, sockfd=%d\n", sockfd);
+		return -2;
+	}
+
+	memcpy(&taddr, &ifr.ifr_addr, sizeof(struct sockaddr));
+
+	memcpy(addr, &taddr.sin_addr, sizeof(struct in_addr));
+
+	close(sockfd);
+	return 0;
+}

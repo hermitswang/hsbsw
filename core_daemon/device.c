@@ -637,6 +637,9 @@ void _process_dev_act(HSB_ACT_T *act)
 			if (!reply)
 				return;
 
+			if (act->u.action.id == HSB_ACT_TYPE_REMOTE_CONTROL)
+				usleep(200000);
+
 			resp.type = HSB_RESP_TYPE_RESULT;
 			resp.u.result.ret_val = ret;
 

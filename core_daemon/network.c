@@ -35,7 +35,7 @@ static int check_tcp_pkt_valid(uint8_t *buf, int len)
 	if (!HSB_CMD_VALID(command))
 		return -2;
 
-	if (len != length)
+	if (len < length)
 		return -3;
 
 	return 0;
@@ -224,20 +224,27 @@ static int _make_notify_resp(uint8_t *buf, HSB_RESP_T *resp)
 	return len;
 }
 
-int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
+int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply, int *used)
 {
 	int ret = 0;
 	int rlen = 0;
 	uint8_t reply_buf[1024];
-	uint16_t cmd;
+	uint16_t cmd, cmdlen;
+
+	//hsb_debug("get tcp packet, len=%d\n", len);
 
 	if (check_tcp_pkt_valid(buf, len)) {
-		hsb_debug("tcp pkt invalid\n");
+		hsb_debug("tcp pkt invalid, len=%d\n", len);
+		*used = len;
 		return -1;
 	}
 
 	cmd = GET_CMD_FIELD(buf, 0, uint16_t);
+	cmdlen = GET_CMD_FIELD(buf, 2, uint16_t);
 	memset(reply_buf, 0, sizeof(reply_buf));
+
+	*used = cmdlen;
+	//hsb_debug("cmd: %x, len: %d\n", cmd, cmdlen);
 
 	switch (cmd) {
 		case HSB_CMD_GET_DEVS:
@@ -429,12 +436,25 @@ int deal_tcp_packet(int fd, uint8_t *buf, int len, void *reply)
 		case HSB_CMD_DO_ACTION:
 		{
 			uint32_t dev_id = GET_CMD_FIELD(buf, 4, uint32_t);
+			uint16_t act_id = GET_CMD_FIELD(buf, 8, uint16_t);
+			uint16_t param1 = GET_CMD_FIELD(buf, 10, uint16_t);
+			uint32_t param2 = GET_CMD_FIELD(buf, 12, uint32_t);
 			HSB_ACTION_T act = { 0 };
 
-			act.devid = dev_id;
-			act.id = GET_CMD_FIELD(buf, 8, uint16_t);
-			act.param1 = GET_CMD_FIELD(buf, 10, uint16_t);
-			act.param2 = GET_CMD_FIELD(buf, 12, uint32_t);
+			if (act_id == HSB_ACT_TYPE_REMOTE_CONTROL) {
+				act.devid = dev_id;
+				ret = remote_key_mapping(param1, param2, &act);
+				if (HSB_E_OK != ret) {
+					rlen = _reply_result(reply_buf, ret);
+					break;
+				}
+			} else {
+				/* TODO */
+				act.devid = dev_id;
+				act.id = act_id;
+				act.param1 = param1;
+				act.param2 = param2;
+			}
 
 			ret = set_dev_action_async(&act, reply);
 
@@ -690,6 +710,7 @@ static void *tcp_listen_thread(void *arg)
 			return NULL;
 		}
 
+		hsb_debug("get a client\n");
 		pctx = get_client_context(sockfd);
 		if (!pctx) {
 			close(sockfd);
@@ -757,9 +778,11 @@ static void tcp_client_handler(gpointer data, gpointer user_data)
 				break;
 			}
 
-			ret = deal_tcp_packet(sockfd, msg, nread, pctx);
-			if (ret) {
-				break;
+			int tmp, nwrite = 0;
+			while (nwrite < nread) {
+				deal_tcp_packet(sockfd, msg + nwrite, nread - nwrite, pctx, &tmp);
+
+				nwrite += tmp;
 			}
 		}
 

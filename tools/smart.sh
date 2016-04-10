@@ -1,3 +1,3 @@
 
-./misc/smart_config HSDSW3_SA7_hwhuang_TPlink_US mtk94056 192.168.1.120 80:89:17:3f:3b:b5
+./misc/smart_config Tenda_53C8A8 02120906 c8:3a:35:53:c8:a8
 

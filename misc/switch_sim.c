@@ -99,12 +99,13 @@ static int deal_udp_pkt(int fd, uint8_t *buf, size_t count, struct sockaddr *cli
 		case VS_CMD_DO_ACTION:
 		{
 			uint16_t act_id = GET_CMD_FIELD(buf, 4, uint16_t);
-			uint16_t act_val = GET_CMD_FIELD(buf, 6, uint16_t);
+			uint16_t act_param1 = GET_CMD_FIELD(buf, 6, uint16_t);
+			uint32_t act_param2 = GET_CMD_FIELD(buf, 8, uint32_t);
 
 			if (act_id == 0) {
 				printf("alarming...\n");
 			} else if (act_id == 1) {
-				printf("IR key: %d\n", act_val);
+				printf("IR key: %d\n", act_param2);
 			}
 
 			rlen = 8;

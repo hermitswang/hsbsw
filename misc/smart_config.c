@@ -238,7 +238,16 @@ static void *listen_thread(void *arg)
 
 		ret = recvfrom(fd, rbuf, sizeof(rbuf), 0, (struct sockaddr *)&dev_addr, &dev_len);
 
-		printf("ret=%d\n", ret);
+		if (11 == ret) {
+			uint8_t mac[6];
+			struct in_addr addr;
+			memcpy(mac, rbuf + 1, 6);
+			memcpy(&addr, rbuf + 7, sizeof(addr));
+
+			printf("device: %02x:%02x:%02x:%02x:%02x:%02x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			printf("        %s\n", inet_ntoa(addr));
+		} else
+			printf("ret=%d\n", ret);
 	}
 
 	return NULL;
@@ -253,21 +262,16 @@ int main(int argc, char *argv[])
 	uint32_t mac_i[6];
 	uint8_t mac[6];
 
-	if (argc < 5) {
-		printf("Usage: %s ssid password ap-ip ap-mac\n", argv[0]);
+	if (argc < 4) {
+		printf("Usage: %s ssid password ap-mac\n", argv[0]);
 		return -1;
 	}
 
-	ret = inet_aton(argv[3], &addr);
-
-	if (!ret) {
-		printf("ap-ip format: xxx.xxx.xxx.xxx\n");
-		return -2;
-	}
+	get_ip(&addr);
 
 	printf("ip: %d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
 
-	if (6 != sscanf(argv[4], "%02x:%02x:%02x:%02x:%02x:%02x", &mac_i[0], &mac_i[1], &mac_i[2], &mac_i[3], &mac_i[4], &mac_i[5]))
+	if (6 != sscanf(argv[3], "%02x:%02x:%02x:%02x:%02x:%02x", &mac_i[0], &mac_i[1], &mac_i[2], &mac_i[3], &mac_i[4], &mac_i[5]))
 	{
 		printf("ap-mac format: xx:xx:xx:xx:xx:xx\n");
 		return -3;
