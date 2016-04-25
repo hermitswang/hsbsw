@@ -33,6 +33,8 @@ typedef struct {
 
 static HSB_REMOTE_DRIVER_T _remote_drv[] = {
 	{ 0, 1, cochip_n9201_key_map },
+	{ 1, 2, NULL },
+	{ 2, 3, NULL },
 };
 
 #define MAX_REMOTE_DRIVER_NUM	(sizeof(_remote_drv) / sizeof(_remote_drv[0]))
@@ -48,6 +50,13 @@ int remote_key_mapping(uint16_t drvid, HSB_REMOTE_KEY_T key, HSB_ACTION_T *act)
 	int data_len = pdrv->data_len;
 	HSB_KEY_MAP_T *key_map = pdrv->key_map;
 	int key_id = 0;
+
+	if (!key_map) {
+		act->id = HSB_ACT_TYPE_REMOTE_CONTROL;
+		act->param1 = drvid;
+		act->param2 = (uint32_t)key;
+		return HSB_E_OK;
+	}
 
 	while (key_map[key_id].key != HSB_REMOTE_KEY_INVALID) 
 	{
