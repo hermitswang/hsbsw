@@ -75,17 +75,20 @@ struct _HSB_DEV_T;
 struct _HSB_DEV_DRV_T;
 
 typedef struct {
-	int (*probe)(void);
 	int (*get_status)(HSB_STATUS_T *status);
 	int (*set_status)(const HSB_STATUS_T *status);
 	int (*set_action)(const HSB_ACTION_T *act);
 } HSB_DEV_OP_T;
 
+typedef struct {
+	int (*probe)(void);
+} HSB_DEV_DRV_OP_T;
+
 typedef struct _HSB_DEV_DRV_T {
 	char			*name;
 	uint32_t		id;
 
-	HSB_DEV_OP_T		*op;
+	HSB_DEV_DRV_OP_T	*op;
 } HSB_DEV_DRV_T;
 
 typedef struct _HSB_TIMER_T {
@@ -177,6 +180,7 @@ typedef struct _HSB_DEV_T {
 	uint32_t		idle_time;
 
 	HSB_DEV_DRV_T		*driver;
+	HSB_DEV_OP_T		*op;
 
 	void			*priv_data;
 } HSB_DEV_T;
@@ -204,7 +208,7 @@ HSB_DEV_T *create_dev(void);
 int destroy_dev(HSB_DEV_T *dev);
 int register_dev(HSB_DEV_T *dev);
 int remove_dev(HSB_DEV_T *dev);
-int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid);
+int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid, HSB_DEV_OP_T *op);
 int dev_offline(uint32_t devid);
 
 int dev_status_updated(uint32_t devid, HSB_STATUS_T *status);

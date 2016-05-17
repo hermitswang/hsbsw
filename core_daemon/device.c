@@ -129,9 +129,13 @@ int get_dev_status(HSB_STATUS_T *status)
 {
 	int ret = HSB_E_NOT_SUPPORTED;
 
-	HSB_DEV_DRV_T *pdrv = _get_dev_drv(status->devid);
-	if (pdrv && pdrv->op->get_status)
-		ret = pdrv->op->get_status(status);
+	HSB_DEV_T *pdev = _find_dev(status->devid);
+
+	if (!pdev)
+		return HSB_E_ENTRY_NOT_FOUND;
+
+	if (pdev->op && pdev->op->get_status)
+		return pdev->op->get_status(status);
 
 	return ret;
 }
@@ -143,9 +147,13 @@ int set_dev_status(const HSB_STATUS_T *status)
 	if (0 == status->devid && status->id[0] == HSB_STATUS_TYPE_WORK_MODE)
 		return set_box_work_mode(status->val[0]);
 
-	HSB_DEV_DRV_T *pdrv = _get_dev_drv(status->devid);
-	if (pdrv && pdrv->op->set_status)
-		ret = pdrv->op->set_status(status);
+	HSB_DEV_T *pdev = _find_dev(status->devid);
+
+	if (!pdev)
+		return HSB_E_ENTRY_NOT_FOUND;
+
+	if (pdev->op && pdev->op->set_status)
+		return pdev->op->set_status(status);
 
 	return ret;
 }
@@ -154,9 +162,13 @@ int set_dev_action(const HSB_ACTION_T *act)
 {
 	int ret = HSB_E_NOT_SUPPORTED;
 
-	HSB_DEV_DRV_T *pdrv = _get_dev_drv(act->devid);
-	if (pdrv && pdrv->op->set_action)
-		ret = pdrv->op->set_action(act);
+	HSB_DEV_T *pdev = _find_dev(act->devid);
+
+	if (!pdev)
+		return HSB_E_ENTRY_NOT_FOUND;
+
+	if (pdev->op && pdev->op->set_action)
+		return pdev->op->set_action(act);
 
 	return ret;
 }
@@ -190,7 +202,10 @@ int probe_dev(uint32_t drv_id)
 	if (!pdrv)
 		return HSB_E_BAD_PARAM;
 
-	return pdrv->op->probe();
+	if (pdrv->op && pdrv->op->probe)
+		return pdrv->op->probe();
+
+	return HSB_E_OK;
 }
 
 static uint32_t alloc_dev_id(void)
@@ -307,7 +322,7 @@ int remove_dev(HSB_DEV_T *dev)
 	return 0;
 }
 
-int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid)
+int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid, HSB_DEV_OP_T *op)
 {
 	int ret = HSB_E_OK;
 	GQueue *offq = &gl_dev_cb.offq;
@@ -336,6 +351,7 @@ int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid)
 	if (id == len) { /* not found in offq */
 		pdev = create_dev();
 		pdev->driver = _find_drv(drvid);
+		pdev->op = op;
 
 		memcpy(&pdev->info, info, sizeof(*info));
 

@@ -12,7 +12,7 @@
 
 #define SYSLOG_DIR	"/var/log/"
 #define PID_DIR	"/var/run/"
-#define DAEMON_WORK_DIR "/tmp/hsb/"
+#define DAEMON_WORK_DIR "/dev/hsb/"
 #define EXECUTE_PATH  "/opt/bin/"
 
 #define MAX_TCP_CLIENT_NUM	(5)

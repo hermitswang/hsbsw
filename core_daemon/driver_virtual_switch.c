@@ -334,16 +334,19 @@ static int virtual_switch_set_action(const HSB_ACTION_T *act)
 }
 
 static HSB_DEV_OP_T virtual_switch_op = {
-	virtual_switch_probe,
 	virtual_switch_get_status,
 	virtual_switch_set_status,
 	virtual_switch_set_action,
 };
 
+static HSB_DEV_DRV_OP_T virtual_switch_drv_op = {
+	virtual_switch_probe,
+};
+
 static HSB_DEV_DRV_T virtual_switch_drv = {
 	"virtual switch",
 	1,
-	&virtual_switch_op,
+	&virtual_switch_drv_op,
 };
 
 static int _remove_timeout_dev(void)
@@ -391,7 +394,7 @@ static int _register_device(struct in_addr *addr, VS_INFO_T *info)
 	dev_info.interface = info->interface;
 	memcpy(dev_info.mac, info->mac, 6);
 	
-	int ret = dev_online(virtual_switch_drv.id, &dev_info, &devid);
+	int ret = dev_online(virtual_switch_drv.id, &dev_info, &devid, &virtual_switch_op);
 	if (HSB_E_OK != ret)
 		return ret;
 
