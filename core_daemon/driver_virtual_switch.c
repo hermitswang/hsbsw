@@ -389,7 +389,7 @@ static int _register_device(struct in_addr *addr, VS_INFO_T *info)
 	if (pdev)
 		return HSB_E_OK;
 
-	HSB_DEV_INFO_T dev_info;
+	HSB_DEV_INFO_T dev_info = { 0 };
 	dev_info.cls = info->dev_class;
 	dev_info.interface = info->interface;
 	memcpy(dev_info.mac, info->mac, 6);

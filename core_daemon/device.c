@@ -341,7 +341,7 @@ int dev_online(uint32_t drvid, HSB_DEV_INFO_T *info, uint32_t *devid, HSB_DEV_OP
 		}
 
 		if (pdev->driver->id == drvid &&
-		    0 == memcmp(pdev->info.mac, info->mac, 6)) {
+		    0 == memcmp(pdev->info.mac, info->mac, 8)) {
 			break;
 		}
 	}
@@ -752,6 +752,7 @@ int init_dev_module(void)
 	init_private_thread();
 
 	init_virtual_switch_drv();
+	init_cz_drv();
 
 	probe_all_devices();
 

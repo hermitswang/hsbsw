@@ -152,7 +152,7 @@ typedef struct {
 typedef struct {
 	HSB_DEV_CLASS_T		cls;
 	uint32_t		interface;
-	uint8_t			mac[6];
+	uint8_t			mac[8];
 } HSB_DEV_INFO_T;
 
 typedef struct _HSB_DEV_T {

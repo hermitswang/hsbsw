@@ -169,7 +169,7 @@ int open_serial_fd(char *dev, unsigned long baud_rate)
 	}
 
 	set_speed(fd, baud_rate);
-	if (!set_Parity(fd, 8, 1, 'E')) {
+	if (!set_Parity(fd, 8, 1, 'n')) {
 		close(fd);
 		return -1;
 	}

@@ -44,4 +44,16 @@ int hsb_message(const char *fmt, ...) ;
 #define hsb_critical(n, args...)	do { } while (0)
 #endif
 
+#include <stdio.h>
+#define print_buf(buf, len)	do { \
+	int idx; \
+	uint8_t *ptr = (uint8_t *)(buf); \
+	for (idx = 0; idx < len; idx++) { \
+		printf("%02X ", ptr[idx]); \
+		if ((idx + 1) % 16 == 0) \
+			printf("\n"); \
+	} \
+	printf("\n"); \
+} while (0)
+
 #endif
